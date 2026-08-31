@@ -631,3 +631,42 @@ code {
   padding: 1px 5px; border-radius: 6px;
   border: 1px solid var(--border-soft);
 }
+
+/* ---------- undo toast ---------- */
+.toast.has-action { pointer-events: auto; padding-right: 6px; }
+.toast-action {
+  border: 0; background: color-mix(in srgb, var(--primary) 22%, transparent);
+  color: var(--primary);
+  font: inherit; font-weight: 800; font-size: .82rem;
+  padding: 5px 13px; margin-left: 4px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.toast-action:hover { background: color-mix(in srgb, var(--primary) 34%, transparent); }
+
+/* ---------- macro rows ---------- */
+.macros { display: flex; flex-direction: column; gap: 13px; }
+.macro { display: flex; flex-direction: column; gap: 5px; }
+.macro-head { display: flex; align-items: baseline; gap: 8px; }
+.macro-name {
+  font-size: .8rem; font-weight: 800; color: var(--text);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.macro-val {
+  margin-left: auto; font-size: .92rem; font-weight: 800;
+  font-family: var(--font-display); letter-spacing: -.01em;
+}
+.macro-val .faint { font-size: .74rem; font-weight: 700; color: var(--text-faint); margin-left: 3px; }
+.macro-foot { font-size: .72rem; font-weight: 700; color: var(--text-faint); }
+.macro-foot .over { color: var(--danger); }
+
+.bar.good > i   { background: linear-gradient(90deg, var(--good), var(--info)); }
+.bar.warn > i   { background: linear-gradient(90deg, var(--warn), var(--primary)); }
+.bar.danger > i { background: linear-gradient(90deg, var(--primary-2), var(--danger)); }
+
+/* macro goal inputs in settings */
+.macrogoal { display: flex; align-items: center; gap: 10px; }
+.macrogoal .check { flex: 1; }
+.macrogoal input[type="number"] { width: 104px; flex: none; }
+.macrogoal .unit { font-size: .76rem; font-weight: 800; color: var(--text-faint); width: 26px; }

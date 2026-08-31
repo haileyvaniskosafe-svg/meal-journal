@@ -120,9 +120,9 @@
             confirmLabel: "Delete", danger: true,
           }).then(function (ok) {
             if (!ok) return;
-            Store.removeShot(existing.id);
+            var token = Store.removeShot(existing.id);
             h.close();
-            UI.toast("Deleted");
+            UI.undoToast("Deleted shot from " + D().monthDay(existing.date), token);
           });
         });
       },

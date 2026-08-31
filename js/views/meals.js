@@ -20,6 +20,53 @@
     return out;
   }
 
+  /* ---------- macro inputs ---------- */
+  /** One number input per macro the user tracks, keyed macro_<key>. */
+  function macroFields(macros) {
+    var tracked = Store.trackedMacros();
+    if (!tracked.length) {
+      return '<p class="hint" style="margin-top:14px">Turn on macros in Settings to log ' +
+             "calories, protein, fiber and the rest here.</p>";
+    }
+    return '<div class="grid cols-2" style="margin-top:14px">' +
+      tracked.map(function (m) {
+        var v = (macros && macros[m.key] != null) ? macros[m.key] : "";
+        return UI.field(m.label + (m.unit ? " (" + m.unit + ")" : ""),
+          UI.input("macro_" + m.key, v,
+            { type: "number", min: 0, step: m.step, inputmode: "decimal", placeholder: "optional" }));
+      }).join("") +
+      "</div>";
+  }
+
+  /** Pull macro_<key> fields back out of a read form. */
+  function readMacros(form) {
+    var out = {};
+    Store.MACROS.forEach(function (m) {
+      var v = form["macro_" + m.key];
+      if (v !== undefined && v !== "") out[m.key] = parseFloat(v) || 0;
+    });
+    return out;
+  }
+
+  /** The small number shown on a planned meal — first tracked macro it has. */
+  function mealBadge(m) {
+    var tracked = Store.trackedMacros();
+    for (var i = 0; i < tracked.length; i++) {
+      var def = tracked[i];
+      var v = m.macros && m.macros[def.key];
+      if (v) return '<span class="meal-macro">' + UI.fmt(v, def.decimals) + (def.unit || "") + "</span>";
+    }
+    return "";
+  }
+
+  /** Day-column footer: the day's totals for up to two tracked macros. */
+  function dayFoot(totals) {
+    return Store.trackedMacros().slice(0, 2).map(function (m) {
+      var v = totals.macros[m.key];
+      return v ? UI.fmt(v, m.decimals) + (m.unit || "") : "";
+    }).filter(Boolean).join(" · ");
+  }
+
   /* ---------- meal editor ---------- */
   function openMealModal(iso, slot, existingId) {
     var meta = UI.SLOT_META[slot];
@@ -47,12 +94,7 @@
       body:
         favHTML +
         UI.field("What are you eating?", UI.input("name", existing ? existing.name : "", { placeholder: "e.g. Pumpkin chili" })) +
-        '<div class="grid cols-2" style="margin-top:14px">' +
-          UI.field("Protein (g)", UI.input("protein", existing && existing.protein ? existing.protein : "",
-            { type: "number", min: 0, step: 1, inputmode: "numeric", placeholder: "optional" })) +
-          UI.field("Calories", UI.input("cal", existing && existing.cal ? existing.cal : "",
-            { type: "number", min: 0, step: 1, inputmode: "numeric", placeholder: "optional" })) +
-        "</div>" +
+        macroFields(existing && existing.macros) +
         '<div style="margin-top:14px">' +
           UI.field("Notes", UI.textarea("note", existing ? existing.note : "", "Prep notes, portion, how it sat with you…")) +
         "</div>" +
@@ -72,8 +114,10 @@
             var f = Store.state.favorites.find(function (x) { return x.id === b.dataset.fav; });
             if (!f) return;
             h.$('[name="name"]').value = f.name;
-            if (f.protein) h.$('[name="protein"]').value = f.protein;
-            if (f.cal) h.$('[name="cal"]').value = f.cal;
+            Store.MACROS.forEach(function (m) {
+              var input = h.$('[name="macro_' + m.key + '"]');
+              if (input) input.value = (f.macros && f.macros[m.key]) || "";
+            });
             if (f.note) h.$('[name="note"]').value = f.note;
           });
         });
@@ -81,6 +125,7 @@
         h.$("[data-save]").addEventListener("click", function () {
           var v = UI.readForm(h.el);
           if (!v.name.trim()) { h.$('[name="name"]').focus(); return; }
+          v.macros = readMacros(v);
           if (existing) Store.updateMeal(iso, slot, existing.id, v);
           else Store.addMeal(iso, slot, v);
           h.close();
@@ -90,15 +135,15 @@
         h.$("[data-save-fav]").addEventListener("click", function () {
           var v = UI.readForm(h.el);
           if (!v.name.trim()) { h.$('[name="name"]').focus(); return; }
-          Store.addFavorite({ name: v.name, slot: slot, protein: v.protein, cal: v.cal, note: v.note });
+          Store.addFavorite({ name: v.name, slot: slot, macros: readMacros(v), note: v.note });
           UI.toast("Saved to favorites", "star");
         });
 
         var del = h.$("[data-del]");
         if (del) del.addEventListener("click", function () {
-          Store.removeMeal(iso, slot, existing.id);
+          var token = Store.removeMeal(iso, slot, existing.id);
           h.close();
-          UI.toast("Removed");
+          UI.undoToast("Deleted " + existing.name, token);
         });
       },
     });
@@ -116,8 +161,7 @@
       body:
         '<div class="row tight" style="margin-bottom:16px">' +
           '<span class="chip">' + totals.count + " item" + (totals.count === 1 ? "" : "s") + "</span>" +
-          (totals.protein ? '<span class="chip">' + UI.fmt(totals.protein) + "g protein</span>" : "") +
-          (totals.cal ? '<span class="chip">' + UI.fmt(totals.cal) + " cal</span>" : "") +
+          UI.macroChips(totals.macros) +
         "</div>" +
         '<div class="stack" style="gap:8px">' +
           '<button class="btn ghost block" data-act="copy-prev">' + UI.ico("copy") +
@@ -145,8 +189,8 @@
             rest.forEach(function (d) { Store.clearDay(d); n += Store.copyDay(iso, d); });
             UI.toast(n ? "Repeated across " + rest.length + " days" : "Nothing to copy");
           } else if (act === "clear") {
-            Store.clearDay(iso);
-            UI.toast("Day cleared");
+            var token = Store.clearDay(iso);
+            UI.undoToast("Cleared " + D().dowName(iso, true), token);
           }
           h.close();
         });
@@ -164,9 +208,12 @@
         (favs.length
           ? '<p class="tiny faint" style="margin-bottom:10px">Tap a favorite to drop it into today.</p>' +
             '<div class="row tight">' + favs.map(function (f) {
+              var macroHint = f.macros && f.macros.cal ? " · " + UI.fmt(f.macros.cal) + " cal"
+                : f.macros && f.macros.protein ? " · " + UI.fmt(f.macros.protein) + "g protein" : "";
               return '<span class="chip"><button class="linkish" data-act="use-fav" data-id="' + f.id + '">' +
-                UI.ico(UI.SLOT_META[f.slot].icon) + UI.esc(f.name) +
-                (f.protein ? " · " + UI.fmt(f.protein) + "p" : "") + "</button>" +
+                UI.ico(UI.SLOT_META[f.slot].icon) + UI.esc(f.name) + UI.esc(macroHint) + "</button>" +
+                '<button class="chip-x" data-act="edit-fav" data-id="' + f.id + '" aria-label="Edit ' +
+                UI.attr(f.name) + '">' + UI.ico("edit") + "</button>" +
                 '<button class="chip-x" data-act="del-fav" data-id="' + f.id + '" aria-label="Delete ' +
                 UI.attr(f.name) + '">' + UI.ico("x") + "</button></span>";
             }).join("") + "</div>"
@@ -175,31 +222,48 @@
     );
   }
 
-  function openFavModal() {
+  function openFavModal(existingId) {
+    var existing = existingId
+      ? Store.state.favorites.find(function (f) { return f.id === existingId; })
+      : null;
+
     UI.modal({
-      title: "New favorite",
+      title: existing ? "Edit favorite" : "New favorite",
       icon: "star",
       submitOnEnter: true,
       body:
-        UI.field("Name", UI.input("name", "", { placeholder: "e.g. Greek yogurt + berries" })) +
+        UI.field("Name", UI.input("name", existing ? existing.name : "",
+          { placeholder: "e.g. Greek yogurt + berries" })) +
         '<div style="margin-top:14px">' +
           UI.field("Usual slot", UI.select("slot", Store.SLOTS.map(function (s) {
             return { value: s, label: UI.SLOT_META[s].label };
-          }), "breakfast")) +
+          }), existing ? existing.slot : "breakfast")) +
         "</div>" +
-        '<div class="grid cols-2" style="margin-top:14px">' +
-          UI.field("Protein (g)", UI.input("protein", "", { type: "number", min: 0, step: 1, placeholder: "optional" })) +
-          UI.field("Calories", UI.input("cal", "", { type: "number", min: 0, step: 1, placeholder: "optional" })) +
+        macroFields(existing && existing.macros) +
+        '<div style="margin-top:14px">' +
+          UI.field("Notes", UI.textarea("note", existing ? existing.note : "", "Optional")) +
         "</div>",
-      foot: '<button class="btn" data-close>Cancel</button>' +
-            '<button class="btn primary" data-primary data-save>' + UI.ico("check") + "Save</button>",
+      foot:
+        (existing
+          ? '<button class="btn danger spread" data-del>' + UI.ico("trash") + "Delete</button>"
+          : '<span class="spread"></span>') +
+        '<button class="btn" data-close>Cancel</button>' +
+        '<button class="btn primary" data-primary data-save>' + UI.ico("check") + "Save</button>",
       onMount: function (h) {
         h.$("[data-save]").addEventListener("click", function () {
           var v = UI.readForm(h.el);
           if (!v.name.trim()) { h.$('[name="name"]').focus(); return; }
-          Store.addFavorite(v);
+          v.macros = readMacros(v);
+          if (existing) Store.updateFavorite(existing.id, v);
+          else Store.addFavorite(v);
           h.close();
-          UI.toast("Favorite saved", "star");
+          UI.toast(existing ? "Favorite updated" : "Favorite saved", "star");
+        });
+        var del = h.$("[data-del]");
+        if (del) del.addEventListener("click", function () {
+          var token = Store.removeFavorite(existing.id);
+          h.close();
+          UI.undoToast("Deleted " + existing.name, token);
         });
       },
     });
@@ -218,7 +282,7 @@
                'data-iso="' + iso + '" data-slot="' + slot + '" data-id="' + m.id + '" ' +
                'title="' + UI.attr(m.note || m.name) + '">' +
                '<span class="meal-name">' + UI.esc(m.name) + "</span>" +
-               (m.protein ? '<span class="meal-macro">' + UI.fmt(m.protein) + "p</span>" : "") +
+               mealBadge(m) +
                "</button>";
       }).join("");
       return (
@@ -240,7 +304,7 @@
             'aria-label="Options for ' + UI.attr(D().pretty(iso)) + '">' + UI.ico("menu") + "</button>" +
         "</div>" +
         slots +
-        (totals.protein ? '<div class="daycol-foot">' + UI.fmt(totals.protein) + "g protein</div>" : "") +
+        (dayFoot(totals) ? '<div class="daycol-foot">' + dayFoot(totals) + "</div>" : "") +
       "</div>"
     );
   }
@@ -250,7 +314,12 @@
     var isThisWeek = start === D().weekStart(D().today(), Store.settings.startDow);
     var list = days();
 
-    var weekProtein = list.reduce(function (t, d) { return t + Store.dayTotals(d).protein; }, 0);
+    var weekMacros = {};
+    Store.MACROS.forEach(function (m) { weekMacros[m.key] = 0; });
+    list.forEach(function (d) {
+      var t = Store.dayTotals(d).macros;
+      Store.MACROS.forEach(function (m) { weekMacros[m.key] += t[m.key]; });
+    });
     var weekItems = list.reduce(function (t, d) { return t + Store.dayTotals(d).count; }, 0);
 
     return (
@@ -267,7 +336,7 @@
       (weekItems
         ? '<div class="row tight" style="margin-bottom:14px">' +
             '<span class="chip">' + weekItems + " meals planned</span>" +
-            (weekProtein ? '<span class="chip">' + UI.fmt(weekProtein) + "g protein this week</span>" : "") +
+            UI.macroChips(weekMacros) +
           "</div>"
         : "") +
       '<div class="weekgrid">' + list.map(dayColumn).join("") + "</div>" +
@@ -288,7 +357,11 @@
       else if (act === "edit-meal") { openMealModal(b.dataset.iso, b.dataset.slot, b.dataset.id); }
       else if (act === "day-menu")  { openDayMenu(b.dataset.iso); }
       else if (act === "add-fav")   { openFavModal(); }
-      else if (act === "del-fav")   { Store.removeFavorite(b.dataset.id); UI.toast("Removed"); }
+      else if (act === "edit-fav")  { openFavModal(b.dataset.id); }
+      else if (act === "del-fav") {
+        var fav = Store.state.favorites.find(function (x) { return x.id === b.dataset.id; });
+        UI.undoToast("Deleted " + (fav ? fav.name : "favorite"), Store.removeFavorite(b.dataset.id));
+      }
       else if (act === "use-fav") {
         var f = Store.state.favorites.find(function (x) { return x.id === b.dataset.id; });
         if (f) {

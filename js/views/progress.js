@@ -49,9 +49,9 @@
         });
         var del = h.$("[data-del]");
         if (del) del.addEventListener("click", function () {
-          Store.removeWeight(existing.id);
+          var token = Store.removeWeight(existing.id);
           h.close();
-          UI.toast("Deleted");
+          UI.undoToast("Deleted weigh-in from " + D().monthDay(existing.date), token);
         });
       },
     });

@@ -1,13 +1,17 @@
 /* ============================================================
    STORE — all persistence lives here.
-   Single versioned JSON blob in localStorage, plus a tiny
+   A single versioned JSON blob in localStorage, plus a tiny
    pub/sub so views re-render when data changes.
+
+   Every record carries `updatedAt` and every delete leaves a
+   tombstone. Local use doesn't need either, but cloud sync does:
+   they're what let two devices merge instead of clobbering.
    ============================================================ */
 (function (global) {
   "use strict";
 
   var KEY = "cauldron.v1";
-  var SCHEMA = 1;
+  var SCHEMA = 2;
 
   /* ---------- date helpers ---------- */
   var D = {
@@ -27,7 +31,7 @@
       d.setDate(d.getDate() + days);
       return D.iso(d);
     },
-    /** Whole days from a -> b (b minus a). DST-safe via UTC noon. */
+    /** Whole days from a -> b (b minus a). DST-safe via UTC. */
     diff: function (a, b) {
       var pa = D.parse(a), pb = D.parse(b);
       var ua = Date.UTC(pa.getFullYear(), pa.getMonth(), pa.getDate());
@@ -62,34 +66,53 @@
     },
   };
 
-  /* ---------- defaults ---------- */
+  /* ---------- macros ----------
+     `type` decides how a day reads:
+       target — you're aiming to reach it (protein, fiber)
+       limit  — you're aiming to stay under it (calories, sodium)
+     That distinction is why the rings can say "on track" honestly. */
+  var MACROS = [
+    { key: "cal",     label: "Calories", unit: "",   type: "limit",  goal: 1500, step: 10, decimals: 0 },
+    { key: "protein", label: "Protein",  unit: "g",  type: "target", goal: 100,  step: 1,  decimals: 0 },
+    { key: "fiber",   label: "Fiber",    unit: "g",  type: "target", goal: 25,   step: 1,  decimals: 0 },
+    { key: "carbs",   label: "Carbs",    unit: "g",  type: "limit",  goal: 150,  step: 1,  decimals: 0 },
+    { key: "fat",     label: "Fat",      unit: "g",  type: "limit",  goal: 60,   step: 1,  decimals: 0 },
+    { key: "sugar",   label: "Sugar",    unit: "g",  type: "limit",  goal: 40,   step: 1,  decimals: 0 },
+    { key: "sodium",  label: "Sodium",   unit: "mg", type: "limit",  goal: 2300, step: 50, decimals: 0 },
+  ];
+  var MACRO_BY_KEY = {};
+  MACROS.forEach(function (m) { MACRO_BY_KEY[m.key] = m; });
+
   var SLOTS = ["breakfast", "lunch", "dinner", "snack"];
 
+  /* ---------- defaults ---------- */
   function defaults() {
     return {
       schema: SCHEMA,
       settings: {
         name: "",
         themeId: "halloween",
-        startDow: 0,            // 0 = Sunday
-        units: "lb",            // lb | kg
-        waterGoal: 8,           // cups/day
-        activityGoal: 150,      // minutes/week
-        proteinGoal: 0,         // g/day, 0 = hidden
-        shotDay: 0,             // 0-6, preferred injection weekday
-        currentDose: 2.5,       // mg
+        startDow: 0,
+        units: "lb",
+        waterGoal: 8,
+        activityGoal: 150,
+        shotDay: 0,
+        currentDose: 2.5,
         startWeight: null,
         goalWeight: null,
-        decor: null,            // null = follow theme
-        showEffects: true,
+        decor: null,
+        trackedMacros: ["cal", "protein", "fiber"],
+        macroGoals: { cal: 1500, protein: 100, fiber: 25, carbs: 150, fat: 60, sugar: 40, sodium: 2300 },
       },
-      meals: {},        // { "2026-10-31": { breakfast:[item], ... } }
-      favorites: [],    // reusable meal ideas
-      shots: [],        // injection log
-      activities: [],   // movement log
-      water: {},        // { iso: cups }
-      weights: [],      // { id, date, value }
-      customThemes: {}, // { id: themeObject }
+      meals: {},
+      favorites: [],
+      shots: [],
+      activities: [],
+      water: {},
+      weights: [],
+      customThemes: {},
+      tombstones: [],   // { kind, id, at } — deletes, so sync can propagate them
+      sync: { url: "", anonKey: "", lastPulledAt: 0, lastPushedAt: 0, email: "" },
     };
   }
 
@@ -98,8 +121,27 @@
   var subs = [];
   var saveTimer = null;
 
+  function now() { return Date.now(); }
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+  function num(v) {
+    var n = parseFloat(v);
+    return isFinite(n) ? n : 0;
+  }
+  /** Stamp a record as changed so sync can order it against other devices. */
+  function touch(rec) { rec.updatedAt = now(); return rec; }
+
+  function tomb(kind, id) {
+    state.tombstones = state.tombstones.filter(function (t) {
+      return !(t.kind === kind && t.id === id);
+    });
+    state.tombstones.push({ kind: kind, id: id, at: now() });
+  }
+  function untomb(kind, id) {
+    state.tombstones = state.tombstones.filter(function (t) {
+      return !(t.kind === kind && t.id === id);
+    });
   }
 
   function deepMerge(base, patch) {
@@ -121,8 +163,7 @@
     try {
       var raw = global.localStorage && global.localStorage.getItem(KEY);
       if (raw) {
-        var parsed = JSON.parse(raw);
-        state = migrate(deepMerge(fresh, parsed));
+        state = migrate(deepMerge(fresh, JSON.parse(raw)));
         return;
       }
     } catch (e) {
@@ -131,8 +172,52 @@
     state = fresh;
   }
 
+  /** v1 stored protein/cal directly on a meal; v2 keeps a macros object. */
   function migrate(s) {
-    // Future schema bumps land here. v1 is the baseline.
+    var from = s.schema || 1;
+
+    if (from < 2) {
+      Object.keys(s.meals || {}).forEach(function (iso) {
+        SLOTS.forEach(function (slot) {
+          (s.meals[iso][slot] || []).forEach(function (m) {
+            m.macros = m.macros || {};
+            if (m.protein) m.macros.protein = num(m.protein);
+            if (m.cal) m.macros.cal = num(m.cal);
+            delete m.protein; delete m.cal;
+          });
+        });
+      });
+      (s.favorites || []).forEach(function (f) {
+        f.macros = f.macros || {};
+        if (f.protein) f.macros.protein = num(f.protein);
+        if (f.cal) f.macros.cal = num(f.cal);
+        delete f.protein; delete f.cal;
+      });
+      // the old single protein goal becomes one of the macro goals
+      if (s.settings && s.settings.proteinGoal) {
+        s.settings.macroGoals = s.settings.macroGoals || {};
+        s.settings.macroGoals.protein = num(s.settings.proteinGoal);
+        if (s.settings.trackedMacros.indexOf("protein") < 0) s.settings.trackedMacros.push("protein");
+      }
+      if (s.settings) delete s.settings.proteinGoal;
+    }
+
+    // Backfill the sync bookkeeping every record needs.
+    var t = now();
+    Object.keys(s.meals || {}).forEach(function (iso) {
+      SLOTS.forEach(function (slot) {
+        (s.meals[iso][slot] || []).forEach(function (m) {
+          if (!m.updatedAt) m.updatedAt = t;
+          m.date = iso; m.slot = slot;          // self-describing, so sync can rebuild
+          m.macros = m.macros || {};
+        });
+      });
+    });
+    ["favorites", "shots", "activities", "weights"].forEach(function (k) {
+      (s[k] || []).forEach(function (r) { if (!r.updatedAt) r.updatedAt = t; });
+    });
+    if (!Array.isArray(s.tombstones)) s.tombstones = [];
+
     s.schema = SCHEMA;
     return s;
   }
@@ -152,11 +237,70 @@
     }
   }
 
-  /** Commit a change: persist (debounced) and notify subscribers. */
   function commit(silent) {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(persist, 120);
     if (!silent) emit();
+    if (global.Sync && Sync.onLocalChange) Sync.onLocalChange();
+  }
+
+  /* ---------- macros ---------- */
+  function trackedMacros() {
+    var picked = state.settings.trackedMacros || [];
+    return MACROS.filter(function (m) { return picked.indexOf(m.key) >= 0; });
+  }
+  function macroGoal(key) {
+    var g = state.settings.macroGoals || {};
+    return g[key] != null ? g[key] : (MACRO_BY_KEY[key] ? MACRO_BY_KEY[key].goal : 0);
+  }
+  function macroDef(key) { return MACRO_BY_KEY[key]; }
+
+  /** Sum every tracked macro for one day. */
+  function macroTotals(iso) {
+    var day = dayMeals(iso), out = {};
+    MACROS.forEach(function (m) { out[m.key] = 0; });
+    SLOTS.forEach(function (slot) {
+      day[slot].forEach(function (item) {
+        var mac = item.macros || {};
+        MACROS.forEach(function (m) { out[m.key] += num(mac[m.key]); });
+      });
+    });
+    return out;
+  }
+
+  /** Mean daily intake of each macro across days that have any meals logged. */
+  function macroAverages(fromIso, toIso) {
+    var sums = {}, days = 0;
+    MACROS.forEach(function (m) { sums[m.key] = 0; });
+    for (var iso = fromIso; iso <= toIso; iso = D.add(iso, 1)) {
+      if (!state.meals[iso]) continue;
+      var t = dayTotals(iso);
+      if (!t.count) continue;
+      days++;
+      MACROS.forEach(function (m) { sums[m.key] += t.macros[m.key]; });
+    }
+    if (!days) return null;
+    var out = { days: days };
+    MACROS.forEach(function (m) { out[m.key] = sums[m.key] / days; });
+    return out;
+  }
+
+  /**
+   * How a day reads against a goal.
+   * target: 100% is success, over is fine. limit: over is the failure case.
+   */
+  function macroStatus(key, value) {
+    var def = MACRO_BY_KEY[key], goal = macroGoal(key);
+    if (!goal) return { pct: 0, tone: "", label: "" };
+    var pct = Math.round((value / goal) * 100);
+    if (!def || def.type === "target") {
+      return { pct: Math.min(100, pct), rawPct: pct, over: false,
+               tone: pct >= 100 ? "good" : "", label: pct >= 100 ? "met" : Math.round(goal - value) + " to go" };
+    }
+    var over = value > goal;
+    return { pct: Math.min(100, pct), rawPct: pct, over: over,
+             tone: over ? "danger" : pct >= 85 ? "warn" : "good",
+             label: over ? Math.round(value - goal) + " over" : Math.round(goal - value) + " left" };
   }
 
   /* ---------- meals ---------- */
@@ -169,38 +313,55 @@
     return d;
   }
 
+  function cleanMacros(src) {
+    var out = {};
+    MACROS.forEach(function (m) {
+      var v = src && src[m.key];
+      if (v !== undefined && v !== null && v !== "" && num(v) !== 0) out[m.key] = num(v);
+    });
+    return out;
+  }
+
   function addMeal(iso, slot, item) {
-    var day = dayMeals(iso);
-    var entry = {
+    var entry = touch({
       id: uid(),
+      date: iso,
+      slot: slot,
       name: (item.name || "").trim() || "Untitled",
       note: item.note || "",
-      protein: num(item.protein),
-      cal: num(item.cal),
+      macros: cleanMacros(item.macros || item),
       done: !!item.done,
-    };
-    day[slot].push(entry);
+    });
+    dayMeals(iso)[slot].push(entry);
     commit();
     return entry;
   }
 
+  function findMeal(iso, slot, id) {
+    return dayMeals(iso)[slot].find(function (m) { return m.id === id; }) || null;
+  }
+
   function updateMeal(iso, slot, id, patch) {
-    var list = dayMeals(iso)[slot];
-    var it = list.find(function (m) { return m.id === id; });
+    var it = findMeal(iso, slot, id);
     if (!it) return null;
     if (patch.name !== undefined) it.name = String(patch.name).trim() || it.name;
     if (patch.note !== undefined) it.note = patch.note;
-    if (patch.protein !== undefined) it.protein = num(patch.protein);
-    if (patch.cal !== undefined) it.cal = num(patch.cal);
     if (patch.done !== undefined) it.done = !!patch.done;
+    if (patch.macros !== undefined) it.macros = cleanMacros(patch.macros);
+    touch(it);
     commit();
     return it;
   }
 
+  /** Returns an undo token so the caller can offer "Undo". */
   function removeMeal(iso, slot, id) {
-    var day = dayMeals(iso);
-    day[slot] = day[slot].filter(function (m) { return m.id !== id; });
+    var list = dayMeals(iso)[slot];
+    var i = list.findIndex(function (m) { return m.id === id; });
+    if (i < 0) return null;
+    var item = list.splice(i, 1)[0];
+    tomb("meal", id);
     commit();
+    return { kind: "meal", iso: iso, slot: slot, index: i, record: item };
   }
 
   function moveMeal(fromIso, fromSlot, id, toIso, toSlot) {
@@ -208,6 +369,8 @@
     var i = list.findIndex(function (m) { return m.id === id; });
     if (i < 0) return;
     var item = list.splice(i, 1)[0];
+    item.date = toIso; item.slot = toSlot;
+    touch(item);
     dayMeals(toIso)[toSlot].push(item);
     commit();
   }
@@ -216,7 +379,10 @@
     var src = dayMeals(fromIso), dst = dayMeals(toIso), n = 0;
     SLOTS.forEach(function (s) {
       src[s].forEach(function (m) {
-        dst[s].push({ id: uid(), name: m.name, note: m.note, protein: m.protein, cal: m.cal, done: false });
+        dst[s].push(touch({
+          id: uid(), date: toIso, slot: s, name: m.name, note: m.note,
+          macros: Object.assign({}, m.macros), done: false,
+        }));
         n++;
       });
     });
@@ -224,41 +390,56 @@
     return n;
   }
 
+  /** Returns an undo token holding the whole day. */
   function clearDay(iso) {
+    var snapshot = JSON.parse(JSON.stringify(dayMeals(iso)));
+    SLOTS.forEach(function (s) {
+      snapshot[s].forEach(function (m) { tomb("meal", m.id); });
+    });
     state.meals[iso] = { breakfast: [], lunch: [], dinner: [], snack: [] };
     commit();
+    return { kind: "day", iso: iso, record: snapshot };
   }
 
   function dayTotals(iso) {
-    var d = dayMeals(iso), protein = 0, cal = 0, count = 0, done = 0;
+    var d = dayMeals(iso), count = 0, done = 0;
     SLOTS.forEach(function (s) {
-      d[s].forEach(function (m) {
-        protein += m.protein || 0;
-        cal += m.cal || 0;
-        count++;
-        if (m.done) done++;
-      });
+      d[s].forEach(function (m) { count++; if (m.done) done++; });
     });
-    return { protein: protein, cal: cal, count: count, done: done };
+    return { count: count, done: done, macros: macroTotals(iso) };
   }
 
   /* ---------- favorites ---------- */
   function addFavorite(fav) {
-    var f = {
+    var f = touch({
       id: uid(),
       name: (fav.name || "").trim() || "Untitled",
       slot: SLOTS.indexOf(fav.slot) >= 0 ? fav.slot : "dinner",
-      protein: num(fav.protein),
-      cal: num(fav.cal),
+      macros: cleanMacros(fav.macros || fav),
       note: fav.note || "",
-    };
+    });
     state.favorites.push(f);
     commit();
     return f;
   }
-  function removeFavorite(id) {
-    state.favorites = state.favorites.filter(function (f) { return f.id !== id; });
+  function updateFavorite(id, patch) {
+    var f = state.favorites.find(function (x) { return x.id === id; });
+    if (!f) return null;
+    if (patch.name !== undefined) f.name = String(patch.name).trim() || f.name;
+    if (patch.slot !== undefined && SLOTS.indexOf(patch.slot) >= 0) f.slot = patch.slot;
+    if (patch.note !== undefined) f.note = patch.note;
+    if (patch.macros !== undefined) f.macros = cleanMacros(patch.macros);
+    touch(f);
     commit();
+    return f;
+  }
+  function removeFavorite(id) {
+    var i = state.favorites.findIndex(function (f) { return f.id === id; });
+    if (i < 0) return null;
+    var rec = state.favorites.splice(i, 1)[0];
+    tomb("favorite", id);
+    commit();
+    return { kind: "favorite", index: i, record: rec };
   }
 
   /* ---------- shots ---------- */
@@ -270,6 +451,8 @@
     { id: "arm-l", label: "Arm (left)" },
     { id: "arm-r", label: "Arm (right)" },
   ];
+  var EFFECTS = ["Nausea", "Fatigue", "Constipation", "Diarrhea", "Headache",
+                 "Heartburn", "Burping", "Site soreness", "Low appetite", "Dizziness"];
 
   function shotsSorted() {
     return state.shots.slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
@@ -277,7 +460,7 @@
   function lastShot() { return shotsSorted()[0] || null; }
 
   function addShot(s) {
-    var entry = {
+    var entry = touch({
       id: uid(),
       date: s.date || D.today(),
       dose: num(s.dose) || state.settings.currentDose,
@@ -285,7 +468,7 @@
       effects: Array.isArray(s.effects) ? s.effects.slice() : [],
       notes: s.notes || "",
       weight: s.weight === "" || s.weight == null ? null : num(s.weight),
-    };
+    });
     state.shots.push(entry);
     if (entry.dose) state.settings.currentDose = entry.dose;
     if (entry.weight != null) addWeight(entry.date, entry.weight, true);
@@ -303,36 +486,34 @@
       s.weight = patch.weight === "" || patch.weight == null ? null : num(patch.weight);
       if (s.weight != null) addWeight(s.date, s.weight, true);
     }
+    touch(s);
     commit();
     return s;
   }
 
   function removeShot(id) {
-    state.shots = state.shots.filter(function (s) { return s.id !== id; });
+    var i = state.shots.findIndex(function (s) { return s.id === id; });
+    if (i < 0) return null;
+    var rec = state.shots.splice(i, 1)[0];
+    tomb("shot", id);
     commit();
+    return { kind: "shot", index: i, record: rec };
   }
 
-  /** Next site in the rotation, so the same spot isn't used twice running. */
   function suggestSite() {
     var last = lastShot();
     if (!last) return SITES[0].id;
     var i = SITES.findIndex(function (s) { return s.id === last.site; });
     return SITES[(i + 1) % SITES.length].id;
   }
-
   function siteLabel(id) {
     var s = SITES.find(function (x) { return x.id === id; });
     return s ? s.label : "—";
   }
-
-  /** ISO date the next weekly shot is due, or null with no history. */
   function nextShotDate() {
     var last = lastShot();
-    if (!last) return null;
-    return D.add(last.date, 7);
+    return last ? D.add(last.date, 7) : null;
   }
-
-  /** Consecutive weeks with a shot logged within +/- 2 days of schedule. */
   function shotStreak() {
     var list = shotsSorted();
     if (!list.length) return 0;
@@ -345,21 +526,18 @@
     return streak;
   }
 
-  var EFFECTS = ["Nausea", "Fatigue", "Constipation", "Diarrhea", "Headache",
-                 "Heartburn", "Burping", "Site soreness", "Low appetite", "Dizziness"];
-
   /* ---------- activity ---------- */
   var ACTIVITY_TYPES = ["Walk", "Run", "Strength", "Yoga", "Cycle", "Swim", "Dance", "Hike", "Pilates", "Other"];
 
   function addActivity(a) {
-    var entry = {
+    var entry = touch({
       id: uid(),
       date: a.date || D.today(),
       type: a.type || "Walk",
       minutes: Math.max(0, Math.round(num(a.minutes))),
       intensity: a.intensity || "moderate",
       notes: a.notes || "",
-    };
+    });
     state.activities.push(entry);
     commit();
     return entry;
@@ -369,12 +547,17 @@
     if (!a) return null;
     ["date", "type", "intensity", "notes"].forEach(function (k) { if (patch[k] !== undefined) a[k] = patch[k]; });
     if (patch.minutes !== undefined) a.minutes = Math.max(0, Math.round(num(patch.minutes)));
+    touch(a);
     commit();
     return a;
   }
   function removeActivity(id) {
-    state.activities = state.activities.filter(function (a) { return a.id !== id; });
+    var i = state.activities.findIndex(function (a) { return a.id === id; });
+    if (i < 0) return null;
+    var rec = state.activities.splice(i, 1)[0];
+    tomb("activity", id);
     commit();
+    return { kind: "activity", index: i, record: rec };
   }
   function activitiesOn(iso) {
     return state.activities.filter(function (a) { return a.date === iso; });
@@ -384,10 +567,8 @@
   }
   function weekMinutes(anyIso) {
     var start = D.weekStart(anyIso || D.today(), state.settings.startDow);
-    var end = D.add(start, 6);
-    return activitiesBetween(start, end).reduce(function (t, a) { return t + a.minutes; }, 0);
+    return activitiesBetween(start, D.add(start, 6)).reduce(function (t, a) { return t + a.minutes; }, 0);
   }
-  /** Consecutive days ending today (or yesterday) with any activity logged. */
   function moveStreak() {
     var day = D.today(), n = 0;
     if (!activitiesOn(day).length) {
@@ -414,14 +595,19 @@
     var v = num(value);
     if (!v) return null;
     var existing = state.weights.find(function (w) { return w.date === iso; });
-    if (existing) { existing.value = v; }
-    else { state.weights.push({ id: uid(), date: iso, value: v }); }
+    if (existing) { existing.value = v; touch(existing); }
+    else { state.weights.push(touch({ id: uid(), date: iso, value: v })); }
+    untomb("weight", iso);
     if (!silent) commit();
     return v;
   }
   function removeWeight(id) {
-    state.weights = state.weights.filter(function (w) { return w.id !== id; });
+    var i = state.weights.findIndex(function (w) { return w.id === id; });
+    if (i < 0) return null;
+    var rec = state.weights.splice(i, 1)[0];
+    tomb("weight", id);
     commit();
+    return { kind: "weight", index: i, record: rec };
   }
   function weightsSorted() {
     return state.weights.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
@@ -437,15 +623,53 @@
     return +(w[w.length - 1].value - start).toFixed(1);
   }
 
+  /* ---------- undo ---------- */
+  /** Put back whatever a remove* call returned. */
+  function undo(token) {
+    if (!token) return false;
+    if (token.kind === "meal") {
+      var list = dayMeals(token.iso)[token.slot];
+      list.splice(Math.min(token.index, list.length), 0, touch(token.record));
+      untomb("meal", token.record.id);
+    } else if (token.kind === "day") {
+      state.meals[token.iso] = token.record;
+      SLOTS.forEach(function (s) {
+        (token.record[s] || []).forEach(function (m) { touch(m); untomb("meal", m.id); });
+      });
+    } else if (token.kind === "shot") {
+      state.shots.splice(Math.min(token.index, state.shots.length), 0, touch(token.record));
+      untomb("shot", token.record.id);
+    } else if (token.kind === "activity") {
+      state.activities.splice(Math.min(token.index, state.activities.length), 0, touch(token.record));
+      untomb("activity", token.record.id);
+    } else if (token.kind === "weight") {
+      state.weights.splice(Math.min(token.index, state.weights.length), 0, touch(token.record));
+      untomb("weight", token.record.id);
+    } else if (token.kind === "favorite") {
+      state.favorites.splice(Math.min(token.index, state.favorites.length), 0, touch(token.record));
+      untomb("favorite", token.record.id);
+    } else {
+      return false;
+    }
+    commit();
+    return true;
+  }
+
   /* ---------- import / export ---------- */
   function exportJSON() { return JSON.stringify(state, null, 2); }
+
+  function unionById(a, b) {
+    var out = (a || []).slice(), seen = {};
+    out.forEach(function (x) { seen[x.id] = true; });
+    (b || []).forEach(function (x) { if (x && !seen[x.id]) { out.push(x); seen[x.id] = true; } });
+    return out;
+  }
 
   function importJSON(text, mode) {
     var incoming = JSON.parse(text);
     if (!incoming || typeof incoming !== "object") throw new Error("Not a Cauldron backup.");
     if (mode === "merge") {
       var merged = deepMerge(JSON.parse(JSON.stringify(state)), incoming);
-      // arrays are replaced wholesale by deepMerge; re-union the log arrays by id
       merged.shots = unionById(state.shots, incoming.shots);
       merged.activities = unionById(state.activities, incoming.activities);
       merged.weights = unionById(state.weights, incoming.weights);
@@ -458,22 +682,11 @@
     return true;
   }
 
-  function unionById(a, b) {
-    var out = (a || []).slice(), seen = {};
-    out.forEach(function (x) { seen[x.id] = true; });
-    (b || []).forEach(function (x) { if (x && !seen[x.id]) { out.push(x); seen[x.id] = true; } });
-    return out;
-  }
-
   function reset() {
+    var sync = state.sync;   // keep the connection, wipe the data
     state = defaults();
+    state.sync = sync;
     commit();
-  }
-
-  /* ---------- util ---------- */
-  function num(v) {
-    var n = parseFloat(v);
-    return isFinite(n) ? n : 0;
   }
 
   /* ---------- public ---------- */
@@ -483,16 +696,15 @@
     SITES: SITES,
     EFFECTS: EFFECTS,
     ACTIVITY_TYPES: ACTIVITY_TYPES,
+    MACROS: MACROS,
 
     get state() { return state; },
     get settings() { return state.settings; },
+    set state(v) { state = v; },
 
-    load: load,
-    commit: commit,
-    uid: uid,
+    load: load, commit: commit, uid: uid, touch: touch, migrate: migrate, defaults: defaults,
     subscribe: function (fn) { subs.push(fn); return function () { subs = subs.filter(function (s) { return s !== fn; }); }; },
 
-    /** set("settings.units", "kg"). Pass silent=true to save without re-rendering. */
     set: function (path, value, silent) {
       var parts = path.split("."), o = state;
       for (var i = 0; i < parts.length - 1; i++) o = o[parts[i]];
@@ -500,9 +712,14 @@
       commit(silent);
     },
 
-    dayMeals: dayMeals, addMeal: addMeal, updateMeal: updateMeal, removeMeal: removeMeal,
-    moveMeal: moveMeal, copyDay: copyDay, clearDay: clearDay, dayTotals: dayTotals,
-    addFavorite: addFavorite, removeFavorite: removeFavorite,
+    trackedMacros: trackedMacros, macroGoal: macroGoal, macroDef: macroDef,
+    macroTotals: macroTotals, macroAverages: macroAverages, macroStatus: macroStatus,
+
+    dayMeals: dayMeals, findMeal: findMeal, addMeal: addMeal, updateMeal: updateMeal,
+    removeMeal: removeMeal, moveMeal: moveMeal, copyDay: copyDay, clearDay: clearDay,
+    dayTotals: dayTotals,
+
+    addFavorite: addFavorite, updateFavorite: updateFavorite, removeFavorite: removeFavorite,
 
     shotsSorted: shotsSorted, lastShot: lastShot, addShot: addShot, updateShot: updateShot,
     removeShot: removeShot, suggestSite: suggestSite, siteLabel: siteLabel,
@@ -517,6 +734,7 @@
     addWeight: addWeight, removeWeight: removeWeight, weightsSorted: weightsSorted,
     latestWeight: latestWeight, weightChange: weightChange,
 
+    undo: undo,
     exportJSON: exportJSON, importJSON: importJSON, reset: reset,
   };
 

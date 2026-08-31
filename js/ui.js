@@ -34,18 +34,87 @@
   }
 
   /* ---------- toast ---------- */
-  function toast(message, iconName) {
+  function toast(message, iconName, opts) {
+    opts = opts || {};
     var root = document.getElementById("toastRoot");
     if (!root) return;
+
     var el = document.createElement("div");
-    el.className = "toast" + (iconName === "check" ? " good" : "");
-    el.innerHTML = ico(iconName || "check") + "<span>" + esc(message) + "</span>";
+    el.className = "toast" + (iconName === "check" ? " good" : "") + (opts.actionLabel ? " has-action" : "");
+    el.innerHTML = ico(iconName || "check") + "<span>" + esc(message) + "</span>" +
+      (opts.actionLabel ? '<button class="toast-action" data-toast-action>' + esc(opts.actionLabel) + "</button>" : "");
     root.appendChild(el);
     Icons.hydrate(el);
-    setTimeout(function () {
+
+    var timer = setTimeout(dismiss, opts.duration || 2300);
+    function dismiss() {
+      clearTimeout(timer);
       el.classList.add("out");
       setTimeout(function () { el.remove(); }, 260);
-    }, 2300);
+    }
+    if (opts.actionLabel) {
+      el.querySelector("[data-toast-action]").addEventListener("click", function () {
+        dismiss();
+        if (opts.onAction) opts.onAction();
+      });
+    }
+    return dismiss;
+  }
+
+  /**
+   * Confirm-free delete: act immediately, but give a real window to take it
+   * back. `token` is the undo handle a Store remove call returns.
+   */
+  function undoToast(message, token) {
+    if (!token) return toast(message);
+    return toast(message, "trash", {
+      actionLabel: "Undo",
+      duration: 7000,
+      onAction: function () {
+        if (Store.undo(token)) toast("Restored", "check");
+      },
+    });
+  }
+
+  /* ---------- macros ---------- */
+  /**
+   * One row per tracked macro: value against goal, with a bar whose tone
+   * reflects whether the macro is something to reach or something to stay under.
+   */
+  function macroRows(totals, opts) {
+    opts = opts || {};
+    var tracked = Store.trackedMacros();
+    if (!tracked.length) {
+      return '<p class="tiny faint">No macros tracked yet — pick some in Settings.</p>';
+    }
+    return '<div class="macros">' + tracked.map(function (m) {
+      var value = totals[m.key] || 0;
+      var goal = Store.macroGoal(m.key);
+      var st = Store.macroStatus(m.key, value);
+      return (
+        '<div class="macro">' +
+          '<div class="macro-head">' +
+            '<span class="macro-name">' + esc(m.label) + "</span>" +
+            '<span class="macro-val mono">' + fmt(value, m.decimals) +
+              '<span class="faint">' + (m.unit ? m.unit : "") + " / " + fmt(goal, m.decimals) + m.unit + "</span></span>" +
+          "</div>" +
+          '<div class="bar ' + (st.tone || "") + '"><i style="width:' + st.pct + '%"></i></div>' +
+          (opts.hideLabels ? "" :
+            '<div class="macro-foot"><span class="' + (st.over ? "over" : "") + '">' + esc(st.label) + "</span></div>") +
+        "</div>"
+      );
+    }).join("") + "</div>";
+  }
+
+  /** Compact inline chips, for tight spots like a day column. */
+  function macroChips(totals) {
+    return Store.trackedMacros().map(function (m) {
+      var v = totals[m.key] || 0;
+      if (!v) return "";
+      var st = Store.macroStatus(m.key, v);
+      return '<span class="chip ' + (st.over ? "danger" : "") + '">' +
+        fmt(v, m.decimals) + m.unit + " " + esc(m.label.toLowerCase()) + "</span>";
+    }).join("");
   }
 
   /* ---------- modal ---------- */
@@ -370,7 +439,8 @@
 
   global.UI = {
     esc: esc, attr: attr, fmt: fmt, signed: signed, pct: pct, ico: ico,
-    toast: toast, modal: modal, confirm: confirm,
+    toast: toast, undoToast: undoToast, modal: modal, confirm: confirm,
+    macroRows: macroRows, macroChips: macroChips,
     download: download, pickFile: pickFile,
     ring: ring, bar: bar, lineChart: lineChart, barChart: barChart,
     field: field, input: input, textarea: textarea, select: select,

@@ -128,7 +128,7 @@
             return '<button class="meal' + (m.done ? " done" : "") + '" data-act="toggle-meal" ' +
                    'data-slot="' + slot + '" data-id="' + m.id + '">' +
                    '<span class="meal-name">' + UI.esc(m.name) + "</span>" +
-                   (m.protein ? '<span class="meal-macro">' + UI.fmt(m.protein) + "p</span>" : "") +
+                   mealBadge(m) +
                    "</button>";
           }).join("")
         : "";
@@ -147,12 +147,36 @@
         '<div class="card-head">' + UI.ico("pumpkin") + "<h2>Today's plate</h2>" +
           '<span class="push">' + totals.done + " / " + totals.count + " eaten</span></div>" +
         '<div class="plate-slots">' + slots + "</div>" +
-        (totals.protein || totals.cal || s.proteinGoal ?
-          '<div class="row tight" style="margin-top:14px">' +
-            (totals.protein ? '<span class="chip">' + UI.fmt(totals.protein) + "g protein" +
-              (s.proteinGoal ? " / " + s.proteinGoal + "g" : "") + "</span>" : "") +
-            (totals.cal ? '<span class="chip">' + UI.fmt(totals.cal) + " cal</span>" : "") +
-          "</div>" : "") +
+        (totals.count ? '<div class="row tight" style="margin-top:14px">' + UI.macroChips(totals.macros) + "</div>" : "") +
+      "</div>"
+    );
+  }
+
+  /** First tracked macro a meal actually has a value for. */
+  function mealBadge(m) {
+    var tracked = Store.trackedMacros();
+    for (var i = 0; i < tracked.length; i++) {
+      var def = tracked[i], v = m.macros && m.macros[def.key];
+      if (v) return '<span class="meal-macro">' + UI.fmt(v, def.decimals) + (def.unit || "") + "</span>";
+    }
+    return "";
+  }
+
+  /* ---------- macro card ---------- */
+  function macroCard() {
+    var tracked = Store.trackedMacros();
+    if (!tracked.length) return "";
+    var iso = D.today();
+    var totals = Store.macroTotals(iso);
+    var logged = Store.dayTotals(iso).count;
+
+    return (
+      '<div class="card">' +
+        '<div class="card-head">' + UI.ico("target") + "<h2>Macros today</h2>" +
+          '<span class="push">' + logged + " item" + (logged === 1 ? "" : "s") + " logged</span></div>" +
+        (logged
+          ? UI.macroRows(totals)
+          : '<p class="muted tiny">Nothing logged yet. Add meals and your macros fill in here.</p>') +
       "</div>"
     );
   }
@@ -210,7 +234,8 @@
         shotCard() + waterCard() + moveCard() +
       "</div>" +
       '<div class="grid" style="margin-top:16px;align-items:start;grid-template-columns:minmax(0,2fr) minmax(0,1fr)" data-collapse>' +
-        plateCard() + weightCard() +
+        plateCard() +
+        '<div class="stack">' + macroCard() + weightCard() + "</div>" +
       "</div>"
     );
   }

@@ -46,13 +46,30 @@
         '<div class="card">' +
           '<div class="card-head">' + UI.ico("target") + "<h2>Daily goals</h2></div>" +
           '<div class="stack" style="gap:14px">' +
-            '<div class="grid cols-2">' +
-              UI.field("Water (cups/day)", UI.input("waterGoal", s.waterGoal, { type: "number", min: 1, max: 30, step: 1 })) +
-              UI.field("Protein (g/day)", UI.input("proteinGoal", s.proteinGoal || "",
-                { type: "number", min: 0, step: 5, placeholder: "off" })) +
-            "</div>" +
+            UI.field("Water (cups/day)", UI.input("waterGoal", s.waterGoal, { type: "number", min: 1, max: 30, step: 1 })) +
             UI.field("Activity (minutes/week)", UI.input("activityGoal", s.activityGoal,
               { type: "number", min: 0, step: 10 }), "150 min/week is the common general guideline.") +
+          "</div>" +
+        "</div>" +
+
+        '<div class="card">' +
+          '<div class="card-head">' + UI.ico("chart") + "<h2>Macros</h2></div>" +
+          '<p class="hint" style="margin-bottom:14px">Tick the ones you want to track. They become ' +
+            "fields when you log a meal, and a daily progress card on Today.</p>" +
+          '<div class="stack" style="gap:9px">' +
+            Store.MACROS.map(function (m) {
+              var on = (s.trackedMacros || []).indexOf(m.key) >= 0;
+              return '<div class="macrogoal">' +
+                '<label class="check"><input type="checkbox" data-macro-on="' + m.key + '"' +
+                  (on ? " checked" : "") + "> " + UI.esc(m.label) +
+                  '<span class="faint tiny" style="margin-left:auto">' +
+                    (m.type === "target" ? "reach" : "stay under") + "</span></label>" +
+                '<input type="number" min="0" step="' + m.step + '" data-macro-goal="' + m.key +
+                  '" value="' + UI.attr(Store.macroGoal(m.key)) + '" aria-label="' +
+                  UI.attr(m.label + " goal") + '"' + (on ? "" : " disabled") + ">" +
+                '<span class="unit">' + UI.esc(m.unit || "kcal") + "</span>" +
+              "</div>";
+            }).join("") +
           "</div>" +
         "</div>" +
 
@@ -108,7 +125,7 @@
   }
 
   function mount(root) {
-    var NUM = { waterGoal: 1, activityGoal: 1, proteinGoal: 1, startDow: 1, shotDay: 1, currentDose: 1 };
+    var NUM = { waterGoal: 1, activityGoal: 1, startDow: 1, shotDay: 1, currentDose: 1 };
     var NULLABLE = { startWeight: 1, goalWeight: 1 };
 
     function commitField(el) {
@@ -131,9 +148,30 @@
     // be lost. Saves are silent (no re-render), so this costs nothing.
     root.addEventListener("input", function (e) {
       if (e.target.name) commitField(e.target);
+
+      var goalKey = e.target.dataset.macroGoal;
+      if (goalKey) {
+        var goals = Object.assign({}, Store.settings.macroGoals);
+        goals[goalKey] = parseFloat(e.target.value) || 0;
+        Store.set("settings.macroGoals", goals, true);
+      }
     });
     root.addEventListener("change", function (e) {
       if (e.target.name) commitField(e.target);
+
+      var onKey = e.target.dataset.macroOn;
+      if (onKey) {
+        var picked = (Store.settings.trackedMacros || []).slice();
+        var i = picked.indexOf(onKey);
+        if (e.target.checked && i < 0) picked.push(onKey);
+        if (!e.target.checked && i >= 0) picked.splice(i, 1);
+        // keep them in the canonical order so the UI reads consistently
+        picked = Store.MACROS.map(function (m) { return m.key; })
+          .filter(function (k) { return picked.indexOf(k) >= 0; });
+        Store.set("settings.trackedMacros", picked, true);
+        var goalInput = root.querySelector('[data-macro-goal="' + onKey + '"]');
+        if (goalInput) goalInput.disabled = !e.target.checked;
+      }
     });
 
     root.addEventListener("click", function (e) {

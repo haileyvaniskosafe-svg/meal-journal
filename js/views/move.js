@@ -86,9 +86,9 @@
 
         var del = h.$("[data-del]");
         if (del) del.addEventListener("click", function () {
-          Store.removeActivity(existing.id);
+          var token = Store.removeActivity(existing.id);
           h.close();
-          UI.toast("Deleted");
+          UI.undoToast("Deleted " + existing.type + " · " + existing.minutes + " min", token);
         });
       },
     });
