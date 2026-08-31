@@ -1,0 +1,3 @@
+Drop your Halloween icon images in this folder (PNG or SVG, square, ~128x128),
+then point the theme at them in Theme -> Customize -> Icon asset pack.
+See ../../README.md for the details.
