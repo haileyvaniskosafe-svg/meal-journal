@@ -66,27 +66,93 @@
     var iso = D.today();
     var cups = Store.water(iso);
     var goal = Store.settings.waterGoal || 8;
+    var size = Store.settings.cupSize || 8;
+    var unit = Store.settings.volumeUnit || "oz";
     var p = UI.pct(cups, goal);
 
+    // show every cup drunk, even past the goal, so extra intake still reads
+    var shown = Math.max(goal, cups);
     var dots = "";
-    for (var i = 0; i < goal; i++) {
-      dots += '<button class="waterdot' + (i < cups ? " on" : "") + '" data-act="set-water" data-n="' + (i + 1) +
-              '" aria-label="' + (i + 1) + ' cups">' + UI.ico("drop") + "</button>";
+    for (var i = 0; i < shown; i++) {
+      var filled = i < cups;
+      var extra = i >= goal;
+      dots += '<button class="waterdot' + (filled ? " on" : "") + (extra ? " extra" : "") +
+              '" data-act="set-water" data-n="' + (i + 1) + '" ' +
+              'aria-label="Set to ' + (i + 1) + ' cups">' + UI.ico("drop") + "</button>";
     }
+
+    var volume = cups * size;
+    var goalVolume = goal * size;
 
     return (
       '<div class="card">' +
         '<div class="card-head">' + UI.ico("drop") + "<h2>Water</h2>" +
-          '<span class="push">' + cups + " / " + goal + "</span></div>" +
+          '<button class="chip push" data-act="edit-water" title="Set an exact amount">' +
+            cups + " / " + goal + "</button></div>" +
         '<div class="waterdots">' + dots + "</div>" +
-        UI.bar(p, "good") +
+        UI.bar(p, cups >= goal ? "good" : "") +
         '<div class="row tight" style="margin-top:12px">' +
-          '<button class="btn sm ghost" data-act="water" data-d="-1">' + UI.ico("down") + "</button>" +
+          '<button class="icon-btn sm" data-act="water" data-d="-1"' + (cups ? "" : " disabled") +
+            ' aria-label="Remove a cup">' + UI.ico("minus") + "</button>" +
           '<button class="btn sm primary" data-act="water" data-d="1">' + UI.ico("plus") + "Cup</button>" +
-          '<span class="push tiny faint">' + (cups >= goal ? "Goal met " : "") + "</span>" +
+          '<span class="push tiny faint">' + UI.fmt(volume) + " / " + UI.fmt(goalVolume) + " " + UI.esc(unit) + "</span>" +
         "</div>" +
       "</div>"
     );
+  }
+
+  /** Type an exact number of cups, and set what a cup means. */
+  function openWaterModal() {
+    var iso = D.today();
+    var s = Store.settings;
+
+    UI.modal({
+      title: "Water today",
+      icon: "drop",
+      submitOnEnter: true,
+      body:
+        UI.field("Cups today", UI.input("cups", Store.water(iso),
+          { type: "number", min: 0, max: 30, step: 1, inputmode: "numeric" })) +
+        '<hr class="divider">' +
+        '<p class="hint" style="margin-bottom:12px">A &ldquo;cup&rdquo; is whatever you want it to be &mdash; ' +
+          "your usual glass, a bottle, a tumbler. These apply every day.</p>" +
+        '<div class="grid cols-2">' +
+          UI.field("One cup is", UI.input("cupSize", s.cupSize || 8,
+            { type: "number", min: 1, max: 200, step: 1, inputmode: "numeric" })) +
+          UI.field("Measured in", UI.select("volumeUnit", [
+            { value: "oz", label: "fl oz" }, { value: "ml", label: "ml" },
+          ], s.volumeUnit || "oz")) +
+        "</div>" +
+        '<div style="margin-top:14px">' +
+          UI.field("Daily goal (cups)", UI.input("waterGoal", s.waterGoal || 8,
+            { type: "number", min: 1, max: 30, step: 1, inputmode: "numeric" })) +
+        "</div>" +
+        '<p class="hint" data-total style="margin-top:12px"></p>',
+      foot: '<button class="btn" data-close>Cancel</button>' +
+            '<button class="btn primary" data-primary data-save>' + UI.ico("check") + "Save</button>",
+      onMount: function (h) {
+        function refreshTotal() {
+          var v = UI.readForm(h.el);
+          var size = parseFloat(v.cupSize) || 0;
+          var goal = parseFloat(v.waterGoal) || 0;
+          h.$("[data-total]").textContent =
+            "That's a goal of " + UI.fmt(size * goal) + " " + v.volumeUnit + " a day.";
+        }
+        refreshTotal();
+        h.el.addEventListener("input", refreshTotal);
+        h.el.addEventListener("change", refreshTotal);
+
+        h.$("[data-save]").addEventListener("click", function () {
+          var v = UI.readForm(h.el);
+          Store.set("settings.cupSize", Math.max(1, parseFloat(v.cupSize) || 8), true);
+          Store.set("settings.volumeUnit", v.volumeUnit === "ml" ? "ml" : "oz", true);
+          Store.set("settings.waterGoal", Math.max(1, parseFloat(v.waterGoal) || 8), true);
+          Store.setWater(iso, parseFloat(v.cups) || 0);
+          h.close();
+          UI.toast("Saved");
+        });
+      },
+    });
   }
 
   /* ---------- move card ---------- */
@@ -252,6 +318,7 @@
         var n = +btn.dataset.n;
         Store.setWater(iso, Store.water(iso) === n ? n - 1 : n);
       }
+      else if (act === "edit-water") { openWaterModal(); }
       else if (act === "log-shot")   { Views.shots.openShotModal(); }
       else if (act === "log-move")   { Views.move.openActivityModal(); }
       else if (act === "log-weight") { Views.progress.openWeightModal(); }

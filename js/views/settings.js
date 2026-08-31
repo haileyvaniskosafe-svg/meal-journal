@@ -133,7 +133,16 @@
         '<div class="card">' +
           '<div class="card-head">' + UI.ico("target") + "<h2>Daily goals</h2></div>" +
           '<div class="stack" style="gap:14px">' +
-            UI.field("Water (cups/day)", UI.input("waterGoal", s.waterGoal, { type: "number", min: 1, max: 30, step: 1 })) +
+            '<div class="grid cols-2">' +
+              UI.field("Water (cups/day)", UI.input("waterGoal", s.waterGoal,
+                { type: "number", min: 1, max: 30, step: 1 })) +
+              UI.field("One cup is", UI.input("cupSize", s.cupSize || 8,
+                { type: "number", min: 1, max: 200, step: 1 })) +
+            "</div>" +
+            UI.field("Measured in", UI.select("volumeUnit", [
+              { value: "oz", label: "fl oz" }, { value: "ml", label: "ml" },
+            ], s.volumeUnit || "oz"),
+              "Goal: " + UI.fmt((s.waterGoal || 8) * (s.cupSize || 8)) + " " + (s.volumeUnit || "oz") + " a day.") +
             UI.field("Activity (minutes/week)", UI.input("activityGoal", s.activityGoal,
               { type: "number", min: 0, step: 10 }), "150 min/week is the common general guideline.") +
           "</div>" +
@@ -214,7 +223,7 @@
   }
 
   function mount(root) {
-    var NUM = { waterGoal: 1, activityGoal: 1, startDow: 1, shotDay: 1, currentDose: 1 };
+    var NUM = { waterGoal: 1, activityGoal: 1, startDow: 1, shotDay: 1, currentDose: 1, cupSize: 1 };
     var NULLABLE = { startWeight: 1, goalWeight: 1 };
 
     function commitField(el) {

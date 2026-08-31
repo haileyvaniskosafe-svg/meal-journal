@@ -94,7 +94,9 @@
         themeId: "halloween",
         startDow: 0,
         units: "lb",
-        waterGoal: 8,
+        waterGoal: 8,          // cups per day
+        cupSize: 8,            // how big one "cup" is, in volumeUnit
+        volumeUnit: "oz",      // oz | ml
         activityGoal: 150,
         shotDay: 0,
         currentDose: 2.5,

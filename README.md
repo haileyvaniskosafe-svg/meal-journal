@@ -50,6 +50,13 @@ A seven-day grid with breakfast / lunch / dinner / snacks. Tap any slot to add a
 - **Favorites** — save any meal once, then drop it into a day with one tap.
 - **Day menu** (the ☰ on each day) — copy yesterday, copy to tomorrow, repeat across the rest of the week, or clear the day.
 
+### 💧 Water
+
+Tap a cup to set the count, or use − / +. Cups past your goal still show, so drinking extra
+counts rather than disappearing. Tap the count to type an exact number — and to **define what
+a cup means**: your usual glass, a 12 oz bottle, a 1 L tumbler, in fl oz or ml. The card then
+shows both (`5 / 8 cups` and `60 / 96 oz`).
+
 ### 🎯 Macros
 
 Track as many or as few as you want — calories, protein, fiber, carbs, fat, sugar, sodium. Pick them in **Settings → Macros** and only those become fields when you log a meal.
@@ -207,6 +214,15 @@ themes/
 No dependencies, no bundler. Fonts load from Google Fonts but are **non-blocking**, so the app still opens instantly (with fallback fonts) offline.
 
 ---
+
+## Credits
+
+Most icons are [Phosphor Icons](https://phosphoricons.com) (MIT) — embedded rather than
+loaded from a CDN, so the app stays dependency-free and works offline. Full licence in
+[`licenses/phosphor-icons-LICENSE`](licenses/phosphor-icons-LICENSE).
+
+A handful of Halloween shapes — pumpkin, bat, cauldron, spider, web, tombstone, corn,
+candy — exist in no icon set, so those are hand-drawn to match Phosphor's weight.
 
 ## A note on the health tracking
 

@@ -4,9 +4,9 @@
 
 /* ---------- icons ---------- */
 .ico { display: inline-block; width: 20px; height: 20px; line-height: 0; color: inherit; }
-.ico svg { width: 100%; height: 100%; display: block; fill: none; stroke: currentColor;
-  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.ico[data-fill] svg { fill: currentColor; stroke: none; }
+/* Each icon carries its own fill/stroke: Phosphor glyphs are filled paths,
+   the hand-drawn Halloween ones are stroked. So don't force either here. */
+.ico svg { width: 100%; height: 100%; display: block; }
 /* image-based icons from a theme asset pack */
 .ico.img { background: center/contain no-repeat; }
 .ico.img svg { display: none; }
@@ -670,3 +670,13 @@ code {
 .macrogoal .check { flex: 1; }
 .macrogoal input[type="number"] { width: 104px; flex: none; }
 .macrogoal .unit { font-size: .76rem; font-weight: 800; color: var(--text-faint); width: 26px; }
+
+/* a cup logged beyond the daily goal still counts — mark it, don't hide it */
+.waterdot.extra { border-style: dashed; }
+.waterdot.extra.on {
+  background: color-mix(in srgb, var(--good) 22%, var(--surface-2));
+  border-color: var(--good);
+  border-style: solid;
+  color: var(--good);
+}
+button.chip[data-act="edit-water"] { cursor: pointer; }
