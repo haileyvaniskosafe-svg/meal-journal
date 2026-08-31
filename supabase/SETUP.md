@@ -34,9 +34,10 @@ approved.
 
 1. Go to **Authentication → URL Configuration**.
 2. Set **Site URL** to wherever you use the app, e.g.
-   `https://meal-journal-eight.vercel.app`
-3. Under **Redirect URLs**, add that same URL. If you also use it locally, add
-   `http://localhost:8000` too.
+   `https://dailybrew.vercel.app`
+3. Under **Redirect URLs**, add `https://dailybrew.vercel.app/**` — the `/**`
+   wildcard matters, because the app returns you to whatever page you started
+   from. If you also use it locally, add `http://localhost:8000/**` too.
 
 > Miss this step and the sign-in email will arrive, but clicking it bounces you
 > to an error page instead of back to the app.
@@ -103,6 +104,25 @@ being signed in as you.
 What this is *not* is end-to-end encrypted. Supabase (and anyone with access to
 your Supabase account) can read the rows. If that matters to you, don't turn
 sync on and keep using Export backup instead.
+
+## Changing the app's address
+
+Browser storage is tied to the exact domain, so a new URL starts empty. With sync
+on that doesn't matter — sign in and everything downloads. With sync off, export a
+backup first.
+
+Add the new domain rather than renaming the project, so both work at once and
+there's never a broken moment:
+
+1. Vercel → project → **Settings → Domains → Add**.
+2. Supabase → **Authentication → URL Configuration** → add the new URL to
+   **Redirect URLs**, keeping the old one for now.
+3. Open the new URL, sign in, confirm your data is there.
+4. Only then: point **Site URL** at the new address, and remove the old domain
+   and old redirect entry.
+
+Nothing in the code hardcodes the address — sign-in returns you to wherever the
+app is actually running — so no code change is needed.
 
 ## Turning it off
 
