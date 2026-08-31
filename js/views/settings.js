@@ -8,6 +8,22 @@
   var DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
   /* ---------- sync ---------- */
+
+  /**
+   * Supabase's Connect dialog hands you a .env snippet rather than two bare
+   * values. Rather than making people surgically extract them, accept the
+   * whole thing pasted into either field and pull the pieces out.
+   */
+  function parseConnection(text) {
+    var out = {};
+    var url = String(text).match(/https:\/\/[a-z0-9-]+\.supabase\.co/i);
+    if (url) out.url = url[0];
+    // new-style publishable key, or the legacy anon JWT
+    var key = String(text).match(/sb_publishable_[A-Za-z0-9_-]{10,}|eyJ[A-Za-z0-9_.\-]{30,}/);
+    if (key) out.key = key[0];
+    return out;
+  }
+
   var STATUS_TONE = { ok: "good", syncing: "", error: "danger", offline: "warn", "signed-out": "warn", off: "" };
   var STATUS_TEXT = {
     ok: "Synced", syncing: "Syncing…", error: "Sync problem",
@@ -35,7 +51,9 @@
           "See <code>supabase/SETUP.md</code> for the five-minute walkthrough.</p>" +
         '<div class="stack" style="gap:14px">' +
           UI.field("Project URL", UI.input("syncUrl", cfg.url, { placeholder: "https://xxxxxxxx.supabase.co" })) +
-          UI.field("Anon public key", UI.input("syncKey", cfg.anonKey, { placeholder: "eyJhbGciOi…" })) +
+          UI.field("Publishable / anon key", UI.input("syncKey", cfg.anonKey,
+            { placeholder: "sb_publishable_… or eyJ…" }),
+            "Or paste Supabase’s whole Connect snippet — both values get picked out.") +
           '<button class="btn primary" data-act="sync-save">' + UI.ico("check") + "Connect</button>" +
         "</div>";
     } else if (!signedIn) {
@@ -201,6 +219,10 @@
     function commitField(el) {
       var k = el.name;
       if (!k) return;
+      // The sync card's fields live under state.sync, not settings. Without
+      // this they'd write junk settings.syncUrl / syncKey keys - and then sync
+      // that junk to every other device.
+      if (k.indexOf("sync") === 0) return;
       var v = el.value;
       if (NULLABLE[k]) v = v === "" ? null : parseFloat(v);
       else if (NUM[k]) v = parseFloat(v) || 0;
@@ -218,6 +240,18 @@
     // be lost. Saves are silent (no re-render), so this costs nothing.
     root.addEventListener("input", function (e) {
       if (e.target.name) commitField(e.target);
+
+      if (e.target.name === "syncUrl" || e.target.name === "syncKey") {
+        var raw = e.target.value;
+        // only worth parsing when it looks like more than a bare value
+        if (raw.length > 40 && /supabase|=|\s/.test(raw)) {
+          var found = parseConnection(raw);
+          var urlEl = root.querySelector('[name="syncUrl"]');
+          var keyEl = root.querySelector('[name="syncKey"]');
+          if (found.url && urlEl) urlEl.value = found.url;
+          if (found.key && keyEl) keyEl.value = found.key;
+        }
+      }
 
       var goalKey = e.target.dataset.macroGoal;
       if (goalKey) {
