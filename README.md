@@ -20,7 +20,22 @@ npx http-server -p 8000
 
 Then open <http://localhost:8000>.
 
-**On your phone:** publish the folder with GitHub Pages (Settings → Pages → deploy from `main`), then open the URL and use *Add to Home Screen*.
+**On your phone:** deploy it (below), open the URL, and use *Add to Home Screen* — it behaves like an app from there.
+
+### Deploying
+
+There's nothing to build. It's static files, so any host works.
+
+**Vercel** (already wired up for this repo): pushes deploy automatically. `vercel.json`
+sets sensible headers and — importantly — tells Vercel *not* to cache the HTML, CSS,
+and JS, since those filenames aren't content-hashed. Without that you'd keep seeing an
+old version after an update. Images you add under `themes/` are cached for a week.
+
+To deploy by hand instead: `npx vercel --prod` from this folder.
+
+> Your data lives in the browser's storage, which is **per-origin**. Data you enter on
+> `localhost` won't appear on the deployed site, and vice versa. Pick one and stick to
+> it — or use **Settings → Export backup** and import it on the other.
 
 ---
 
