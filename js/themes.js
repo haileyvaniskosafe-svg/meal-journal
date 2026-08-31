@@ -387,7 +387,11 @@
     // 3. ambient layer
     renderDecor(decor);
 
-    // 4. brand wordmark
+    // 4. the phone status bar / browser chrome follows the theme
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", tokens["--bg"] || "#17111f");
+
+    // 5. brand wordmark
     var b = theme.brand || {};
     var nameEl = document.getElementById("brandName");
     var tagEl = document.getElementById("brandTag");
@@ -395,7 +399,7 @@
     if (tagEl) tagEl.textContent = b.tag || "meals · shots · movement";
     document.title = (b.name || "Cauldron") + " — meals, shots & movement";
 
-    // 5. icons may have been aliased or overridden
+    // 6. icons may have been aliased or overridden
     if (global.Icons && !(opts && opts.skipIcons)) global.Icons.invalidate(document);
   }
 

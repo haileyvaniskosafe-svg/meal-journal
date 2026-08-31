@@ -1,0 +1,18 @@
+{
+  "name": "Cauldron — meals, shots & movement",
+  "short_name": "Cauldron",
+  "description": "A cute, theme-able tracker for meal planning, weekly GLP-1 shots, macros, and activity.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#17111f",
+  "theme_color": "#17111f",
+  "orientation": "any",
+  "categories": ["health", "lifestyle", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

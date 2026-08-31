@@ -20,7 +20,7 @@ npx http-server -p 8000
 
 Then open <http://localhost:8000>.
 
-**On your phone:** deploy it (below), open the URL, and use *Add to Home Screen* — it behaves like an app from there.
+**On your phone:** deploy it (below), open the URL, and install it — see *Installing it as an app*.
 
 ### Deploying
 
@@ -76,6 +76,26 @@ See below — this is the fun part.
 
 ### Editing and deleting
 Everything you log can be edited later — tap it. Deleting shows a **"Deleted — Undo"** toast for seven seconds, including when you clear a whole day, which brings the entire day back.
+
+---
+
+## Installing it as an app
+
+It's a PWA, so it installs to your home screen and behaves like a native app — its own icon, fullscreen with no browser chrome, and it works with no signal.
+
+**iPhone / iPad** — open the site in **Safari** (this doesn't work from Chrome on iOS), tap the Share button, then **Add to Home Screen**.
+
+**Android** — Chrome shows an *Install app* prompt, or use the ⋮ menu → **Install app**.
+
+**Desktop** — Chrome and Edge show an install icon in the address bar.
+
+Once installed:
+
+- **Works offline.** Log meals, shots and activity on a plane; it syncs when you're back.
+- **Updates itself.** Deploys land on next launch — no reinstalling.
+- **The status bar matches your theme**, so Pastel Boo and Haunted Hollow look right to the edges.
+
+There are no App Store or Play Store listings. Those would mean $99/year for Apple, a Mac with Xcode, and app review for every update — a lot of ceremony for a personal tracker, and the installed PWA is near-indistinguishable in daily use. The groundwork is here if that ever changes: wrapping this in Capacitor is the path.
 
 ---
 
@@ -176,6 +196,9 @@ js/
 supabase/
   SETUP.md            how to turn sync on
   schema.sql          the table and its security rules
+manifest.json         PWA metadata (name, icons, colors)
+sw.js                 service worker - offline support
+icons/                home-screen icons, incl. maskable
 themes/
   README.md           how to plug in your own icon pack
   halloween/assets/   drop your Halloween images here
