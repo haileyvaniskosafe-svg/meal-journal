@@ -34,8 +34,8 @@ approved.
 
 1. Go to **Authentication → URL Configuration**.
 2. Set **Site URL** to wherever you use the app, e.g.
-   `https://dailybrew.vercel.app`
-3. Under **Redirect URLs**, add `https://dailybrew.vercel.app/**` — the `/**`
+   `https://dailybrews.vercel.app`
+3. Under **Redirect URLs**, add `https://dailybrews.vercel.app/**` — the `/**`
    wildcard matters, because the app returns you to whatever page you started
    from. If you also use it locally, add `http://localhost:8000/**` too.
 
