@@ -109,8 +109,10 @@
       shots: [],
       activities: [],
       water: {},
+      waterAt: {},          // { iso: updatedAt } so water syncs per-day, not all-or-nothing
       weights: [],
       customThemes: {},
+      settingsAt: 0,    // settings sync as one record, so they need one timestamp
       tombstones: [],   // { kind, id, at } — deletes, so sync can propagate them
       sync: { url: "", anonKey: "", lastPulledAt: 0, lastPushedAt: 0, email: "" },
     };
@@ -121,7 +123,22 @@
   var subs = [];
   var saveTimer = null;
 
-  function now() { return Date.now(); }
+  /**
+   * Monotonic clock for record stamps.
+   *
+   * Two records written in the same millisecond used to get identical
+   * `updatedAt` values. Sync pushes everything newer than a cursor, and
+   * the cursor is the highest stamp it just sent — so any record sharing
+   * that exact millisecond fell outside `> cursor` and was never pushed
+   * again. Guaranteeing strictly increasing stamps closes that gap.
+   */
+  var lastNow = 0;
+  function now() {
+    var t = Date.now();
+    if (t <= lastNow) t = lastNow + 1;
+    lastNow = t;
+    return t;
+  }
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
@@ -217,6 +234,9 @@
       (s[k] || []).forEach(function (r) { if (!r.updatedAt) r.updatedAt = t; });
     });
     if (!Array.isArray(s.tombstones)) s.tombstones = [];
+    if (!s.waterAt || typeof s.waterAt !== "object") s.waterAt = {};
+    Object.keys(s.water || {}).forEach(function (iso) { if (!s.waterAt[iso]) s.waterAt[iso] = t; });
+    if (!s.settingsAt) s.settingsAt = t;
 
     s.schema = SCHEMA;
     return s;
@@ -227,7 +247,7 @@
       global.localStorage.setItem(KEY, JSON.stringify(state));
     } catch (e) {
       console.warn("Cauldron: save failed (storage full or blocked).", e);
-      if (global.UI && UI.toast) UI.toast("Couldn't save — storage is blocked or full.", "alert");
+      if (global.UI && global.UI.toast) global.UI.toast("Couldn't save — storage is blocked or full.", "alert");
     }
   }
 
@@ -241,7 +261,7 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(persist, 120);
     if (!silent) emit();
-    if (global.Sync && Sync.onLocalChange) Sync.onLocalChange();
+    if (global.Sync && global.Sync.onLocalChange) global.Sync.onLocalChange();
   }
 
   /* ---------- macros ---------- */
@@ -585,6 +605,8 @@
     var v = Math.max(0, Math.min(30, Math.round(num(cups))));
     if (v === 0) delete state.water[iso];
     else state.water[iso] = v;
+    state.waterAt = state.waterAt || {};
+    state.waterAt[iso] = now();
     commit();
     return v;
   }
@@ -703,12 +725,14 @@
     set state(v) { state = v; },
 
     load: load, commit: commit, uid: uid, touch: touch, migrate: migrate, defaults: defaults,
+    now: now, tomb: tomb, untomb: untomb,
     subscribe: function (fn) { subs.push(fn); return function () { subs = subs.filter(function (s) { return s !== fn; }); }; },
 
     set: function (path, value, silent) {
       var parts = path.split("."), o = state;
       for (var i = 0; i < parts.length - 1; i++) o = o[parts[i]];
       o[parts[parts.length - 1]] = value;
+      if (parts[0] === "settings") state.settingsAt = now();
       commit(silent);
     },
 

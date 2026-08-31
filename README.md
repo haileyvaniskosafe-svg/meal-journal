@@ -33,9 +33,9 @@ old version after an update. Images you add under `themes/` are cached for a wee
 
 To deploy by hand instead: `npx vercel --prod` from this folder.
 
-> Your data lives in the browser's storage, which is **per-origin**. Data you enter on
-> `localhost` won't appear on the deployed site, and vice versa. Pick one and stick to
-> it — or use **Settings → Export backup** and import it on the other.
+> Without sync turned on, data lives in that browser's storage, which is **per-origin** —
+> what you enter on `localhost` won't appear on the deployed site. Turn on sync (below),
+> or use **Settings → Export backup**, to move between them.
 
 ---
 
@@ -45,10 +45,16 @@ To deploy by hand instead: `npx vercel --prod` from this folder.
 Your daily landing pad: shot countdown, water cups, this week's movement ring, today's four meal slots, and your latest weigh-in — all one tap from logging.
 
 ### 🍽️ Meal Plan
-A seven-day grid with breakfast / lunch / dinner / snacks. Tap any slot to add a meal with optional protein and calories. Tap a planned meal to mark it eaten, edit, or delete.
+A seven-day grid with breakfast / lunch / dinner / snacks. Tap any slot to add a meal. Tap a planned meal to mark it eaten, edit, or delete.
 
 - **Favorites** — save any meal once, then drop it into a day with one tap.
 - **Day menu** (the ☰ on each day) — copy yesterday, copy to tomorrow, repeat across the rest of the week, or clear the day.
+
+### 🎯 Macros
+
+Track as many or as few as you want — calories, protein, fiber, carbs, fat, sugar, sodium. Pick them in **Settings → Macros** and only those become fields when you log a meal.
+
+Each macro is either something you're **reaching for** (protein, fiber) or **staying under** (calories, sodium), and the daily card reads accordingly: a target bar turns green at 100%, a limit bar goes amber as you approach and red past it, with *"45g to go"* or *"300 over"* underneath.
 
 ### 💉 Shots
 Built specifically around a weekly tirzepatide schedule.
@@ -67,6 +73,9 @@ Weight trend chart (30d / 90d / 365d / all), change since start, progress toward
 
 ### 🎨 Theme
 See below — this is the fun part.
+
+### Editing and deleting
+Everything you log can be edited later — tap it. Deleting shows a **"Deleted — Undo"** toast for seven seconds, including when you clear a whole day, which brings the entire day back.
 
 ---
 
@@ -113,14 +122,27 @@ The 54 built-in icons are hand-drawn SVGs that inherit theme colors automaticall
 
 ## Your data
 
-Everything is stored in your browser's `localStorage` on this device. Nothing is uploaded anywhere, there's no account, and no analytics.
+By default everything is stored in your browser's `localStorage` on this device. Nothing is uploaded, there's no account, and no analytics.
 
-The flip side: **clearing your browser's site data erases it.** So:
+The flip side: **clearing your browser's site data erases it.** So either turn on sync, or export regularly:
 
 - **Settings → Export backup** downloads everything as one JSON file.
-- **Settings → Import backup** merges a backup back in (keeps what you have, adds what's missing).
+- **Settings → Import backup** merges a backup back in.
 
-Worth exporting every so often, and definitely before switching devices or browsers.
+Roughly 250 KB per year of daily use, against a ~5 MB browser budget — about twenty years' headroom.
+
+### Syncing across devices (optional)
+
+Connect a free Supabase project and your phone and laptop stay in step, with a real off-device backup. **[supabase/SETUP.md](supabase/SETUP.md)** is the five-minute walkthrough; [`supabase/schema.sql`](supabase/schema.sql) is the one query you run.
+
+How it behaves:
+
+- **Automatic** — pushes a couple of seconds after a change, pulls when you return to the tab.
+- **Offline-safe** — everything still saves locally and syncs when you reconnect.
+- **Merges rather than overwrites** — each meal, shot, activity and weigh-in syncs on its own, so logging breakfast on your phone and a walk on your laptop keeps both. If the *same* record is edited in two places, the later edit wins.
+- **Deletes travel too.**
+
+Privacy: the table has row-level security so it only ever returns your own rows, and anonymous access is denied outright — which is what makes it safe to ship the public anon key in the page. It is **not** end-to-end encrypted, though: Supabase can read your rows. If that's not acceptable, leave sync off and use Export backup.
 
 ---
 
@@ -147,9 +169,13 @@ js/
   icons.js            54 hand-drawn SVG icons + asset-pack overrides
   store.js            all persistence, date maths, and data operations
   themes.js           theme definitions and the skinning engine
+  sync.js             optional Supabase sync (auth + merge engine)
   ui.js               modals, toasts, rings, charts, form helpers
   views/              one file per screen
   app.js              hash router and boot
+supabase/
+  SETUP.md            how to turn sync on
+  schema.sql          the table and its security rules
 themes/
   README.md           how to plug in your own icon pack
   halloween/assets/   drop your Halloween images here

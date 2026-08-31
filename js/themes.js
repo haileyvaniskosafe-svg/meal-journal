@@ -396,7 +396,7 @@
     document.title = (b.name || "Cauldron") + " — meals, shots & movement";
 
     // 5. icons may have been aliased or overridden
-    if (global.Icons && !(opts && opts.skipIcons)) Icons.invalidate(document);
+    if (global.Icons && !(opts && opts.skipIcons)) global.Icons.invalidate(document);
   }
 
   function renderDecor(kind) {
@@ -443,6 +443,7 @@
     if (!global.Store) return;
     theme.custom = true;
     if (!theme.id || BUILTIN[theme.id]) theme.id = "custom-" + Store.uid();
+    theme.updatedAt = global.Store.now();
     Store.state.customThemes[theme.id] = clone(theme);
     Store.commit();
     return theme;

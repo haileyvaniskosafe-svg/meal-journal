@@ -87,6 +87,10 @@
     Themes.init();
     Icons.hydrate(document);
 
+    // A magic link returns as #access_token=... — consume it before the
+    // hash router tries to read it as a route.
+    Sync.init();
+
     if (!location.hash) location.replace("#/today");
     render();
 

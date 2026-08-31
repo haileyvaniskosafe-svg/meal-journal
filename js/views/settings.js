@@ -7,6 +7,74 @@
 
   var DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+  /* ---------- sync ---------- */
+  var STATUS_TONE = { ok: "good", syncing: "", error: "danger", offline: "warn", "signed-out": "warn", off: "" };
+  var STATUS_TEXT = {
+    ok: "Synced", syncing: "Syncing…", error: "Sync problem",
+    offline: "Offline", "signed-out": "Signed out", off: "Not set up",
+  };
+
+  function syncCard() {
+    var configured = Sync.isConfigured();
+    var signedIn = Sync.isSignedIn();
+    var st = Sync.status;
+    var cfg = Store.state.sync;
+
+    var pill = '<span class="chip ' + (STATUS_TONE[st] || "") + ' push">' +
+      UI.ico(st === "ok" ? "check" : st === "error" ? "alert" : "refresh") +
+      UI.esc(STATUS_TEXT[st] || st) + "</span>";
+
+    var body;
+    if (!configured) {
+      body =
+        '<p class="muted tiny">Right now your data lives only in this browser. Connect a free ' +
+          "Supabase project to sync between your phone and laptop — and to have a real backup " +
+          "off this device.</p>" +
+        '<p class="hint" style="margin:10px 0 14px">Both values below are safe to paste here: the ' +
+          "anon key is designed to be public, and the database only ever returns your own rows. " +
+          "See <code>supabase/SETUP.md</code> for the five-minute walkthrough.</p>" +
+        '<div class="stack" style="gap:14px">' +
+          UI.field("Project URL", UI.input("syncUrl", cfg.url, { placeholder: "https://xxxxxxxx.supabase.co" })) +
+          UI.field("Anon public key", UI.input("syncKey", cfg.anonKey, { placeholder: "eyJhbGciOi…" })) +
+          '<button class="btn primary" data-act="sync-save">' + UI.ico("check") + "Connect</button>" +
+        "</div>";
+    } else if (!signedIn) {
+      body =
+        '<p class="muted tiny">Sign in and this device joins your sync. We\'ll email you a link — ' +
+          "no password to remember.</p>" +
+        (Sync.lastError ? '<p class="tiny" style="color:var(--danger);margin-top:8px">' +
+          UI.esc(Sync.lastError) + "</p>" : "") +
+        '<div class="stack" style="gap:14px;margin-top:14px">' +
+          UI.field("Email", UI.input("syncEmail", cfg.email, { type: "text", placeholder: "you@example.com" })) +
+          '<button class="btn primary" data-act="sync-signin">' + UI.ico("upload") + "Email me a sign-in link</button>" +
+          '<button class="btn quiet sm" data-act="sync-forget">Use a different project</button>' +
+        "</div>";
+    } else {
+      var last = Sync.lastSyncAt
+        ? new Date(Sync.lastSyncAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+        : "not yet";
+      body =
+        '<p class="muted tiny">Signed in as <b>' + UI.esc(Sync.email) + "</b>. Changes sync " +
+          "automatically — a few seconds after you make them, and whenever you come back to the tab.</p>" +
+        (Sync.lastError ? '<p class="tiny" style="color:var(--danger);margin-top:8px">' +
+          UI.esc(Sync.lastError) + "</p>" : "") +
+        '<div class="row tight" style="margin-top:14px">' +
+          '<span class="chip">Last synced ' + UI.esc(last) + "</span>" +
+        "</div>" +
+        '<div class="row tight" style="margin-top:14px">' +
+          '<button class="btn primary sm" data-act="sync-now">' + UI.ico("refresh") + "Sync now</button>" +
+          '<button class="btn ghost sm" data-act="sync-signout">Sign out</button>' +
+        "</div>";
+    }
+
+    return (
+      '<div class="card" style="margin-top:16px">' +
+        '<div class="card-head">' + UI.ico("refresh") + "<h2>Sync across devices</h2>" + pill + "</div>" +
+        body +
+      "</div>"
+    );
+  }
+
   function render() {
     var s = Store.settings;
     var counts = {
@@ -100,6 +168,8 @@
 
       "</div>" +
 
+      syncCard() +
+
       '<div class="card" style="margin-top:16px">' +
         '<div class="card-head">' + UI.ico("download") + "<h2>Your data</h2></div>" +
         '<div class="row tight" style="margin-bottom:14px">' +
@@ -179,7 +249,58 @@
       if (!b) return;
       var act = b.dataset.act;
 
-      if (act === "export") {
+      if (act === "sync-save") {
+        var url = (root.querySelector('[name="syncUrl"]').value || "").trim().replace(/\/+$/, "");
+        var key = (root.querySelector('[name="syncKey"]').value || "").trim();
+        if (!/^https:\/\/.+/.test(url)) { UI.toast("That URL should start with https://", "alert"); return; }
+        if (key.length < 20) { UI.toast("That anon key looks too short", "alert"); return; }
+        Store.set("sync.url", url, true);
+        Store.set("sync.anonKey", key, true);
+        Sync.configChanged();
+        App.refresh();
+        UI.toast("Connected — now sign in", "check");
+      }
+      else if (act === "sync-signin") {
+        var email = (root.querySelector('[name="syncEmail"]').value || "").trim();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { UI.toast("Enter a valid email", "alert"); return; }
+        b.disabled = true;
+        Sync.signIn(email).then(function () {
+          Store.set("sync.email", email, true);
+          UI.modal({
+            title: "Check your email",
+            icon: "check",
+            body: '<p class="muted">We sent a sign-in link to <b>' + UI.esc(email) + "</b>. " +
+                  "Open it on this device and you'll land back here, signed in.</p>" +
+                  '<p class="hint" style="margin-top:12px">Do the same on your other devices to ' +
+                  "link them to the same data.</p>",
+            foot: '<button class="btn primary" data-close>Got it</button>',
+          });
+        }).catch(function (err) {
+          UI.toast(err.message || "Could not send the link", "alert");
+        }).then(function () { b.disabled = false; });
+      }
+      else if (act === "sync-now") {
+        Sync.sync({ toast: true }).catch(function () { /* toast already shown */ });
+      }
+      else if (act === "sync-signout") {
+        UI.confirm({
+          title: "Sign out of sync?",
+          message: "Your data stays on this device. It just stops syncing until you sign in again.",
+          confirmLabel: "Sign out",
+        }).then(function (okd) {
+          if (!okd) return;
+          Sync.signOut();
+          App.refresh();
+          UI.toast("Signed out");
+        });
+      }
+      else if (act === "sync-forget") {
+        Store.set("sync.url", "", true);
+        Store.set("sync.anonKey", "", true);
+        Sync.configChanged();
+        App.refresh();
+      }
+      else if (act === "export") {
         var stamp = Store.D.today();
         UI.download("cauldron-backup-" + stamp + ".json", Store.exportJSON());
         UI.toast("Backup downloaded", "download");
@@ -221,5 +342,14 @@
     });
   }
 
-  Views.settings = { render: render, mount: mount };
+  Views.settings = {
+    render: render,
+    mount: function (root) {
+      mount(root);
+      // status pill and the whole card change as sync progresses
+      Sync.onChange(function () {
+        if (App.route === "settings") App.refresh();
+      });
+    },
+  };
 })(window);
