@@ -53,17 +53,27 @@ approved.
 
 ## 5. Connect the app
 
+If the project is already baked into `js/config.js` (it is, for this repo),
+there's nothing to paste — skip to signing in.
+
 1. Open Cauldron → **Settings → Sync across devices**.
-2. Paste both values, hit **Connect**.
+2. If it asks for a URL and key, paste them and hit **Connect**. Supabase's
+   Connect dialog gives you a `.env` snippet; you can paste the whole thing
+   into either field and both values get picked out.
 3. Enter your email, hit **Email me a sign-in link**.
 4. Open the email on that device and click the link. You'll land back in the app,
    signed in, and your existing data uploads within a few seconds.
 
 ## 6. Add your other devices
 
-Same thing on your phone: open the app, Settings → Sync, paste the same two
-values, sign in with the **same email**. Everything already in the account
-downloads, and from then on both devices stay in step.
+Open the app on your phone, Settings → Sync, and sign in with the **same email**.
+Everything already in the account downloads, and from then on both devices stay
+in step.
+
+## Pointing at a different project
+
+**Settings → Sync → Use a different project** clears the built-in connection and
+asks for your own URL and key. That choice sticks — it won't quietly fall back.
 
 ---
 

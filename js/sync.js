@@ -31,7 +31,23 @@
   var listeners = [];
 
   /* ---------- config ---------- */
-  function cfg() { return (global.Store && Store.state.sync) || {}; }
+  /**
+   * The connection in use. Anything saved in Settings wins; otherwise we fall
+   * back to the project baked into js/config.js, so a new device only has to
+   * sign in. `ignoreBuiltIn` is set when someone deliberately disconnects.
+   */
+  function cfg() {
+    var s = (global.Store && global.Store.state.sync) || {};
+    var built = (!s.ignoreBuiltIn && global.CAULDRON_CONFIG) || {};
+    return {
+      url: s.url || built.supabaseUrl || "",
+      anonKey: s.anonKey || built.supabaseAnonKey || "",
+      lastPulledAt: s.lastPulledAt || 0,
+      lastPushedAt: s.lastPushedAt || 0,
+      email: s.email || "",
+      builtIn: !s.url && !!built.supabaseUrl,
+    };
+  }
   function isConfigured() { return !!(cfg().url && cfg().anonKey); }
   function isSignedIn() { return !!(auth && auth.access_token); }
 
@@ -451,6 +467,7 @@
 
   global.Sync = {
     init: init,
+    config: cfg,
     configChanged: configChanged,
     onLocalChange: onLocalChange,
     sync: sync,

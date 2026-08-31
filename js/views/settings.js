@@ -34,7 +34,7 @@
     var configured = Sync.isConfigured();
     var signedIn = Sync.isSignedIn();
     var st = Sync.status;
-    var cfg = Store.state.sync;
+    var cfg = Sync.config();
 
     var pill = '<span class="chip ' + (STATUS_TONE[st] || "") + ' push">' +
       UI.ico(st === "ok" ? "check" : st === "error" ? "alert" : "refresh") +
@@ -60,6 +60,7 @@
       body =
         '<p class="muted tiny">Sign in and this device joins your sync. We\'ll email you a link — ' +
           "no password to remember.</p>" +
+        (cfg.builtIn ? '<p class="hint" style="margin-top:8px">Using this app&rsquo;s built-in project &mdash; nothing to paste.</p>' : "") +
         (Sync.lastError ? '<p class="tiny" style="color:var(--danger);margin-top:8px">' +
           UI.esc(Sync.lastError) + "</p>" : "") +
         '<div class="stack" style="gap:14px;margin-top:14px">' +
@@ -290,6 +291,7 @@
         if (key.length < 20) { UI.toast("That anon key looks too short", "alert"); return; }
         Store.set("sync.url", url, true);
         Store.set("sync.anonKey", key, true);
+        Store.set("sync.ignoreBuiltIn", true, true);   // an explicit choice wins
         Sync.configChanged();
         App.refresh();
         UI.toast("Connected — now sign in", "check");
@@ -331,6 +333,7 @@
       else if (act === "sync-forget") {
         Store.set("sync.url", "", true);
         Store.set("sync.anonKey", "", true);
+        Store.set("sync.ignoreBuiltIn", true, true);   // don't fall back to the built-in one
         Sync.configChanged();
         App.refresh();
       }
