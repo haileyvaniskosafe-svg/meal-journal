@@ -129,10 +129,11 @@ button.chip:active { transform: scale(.95); }
   font-size: .78rem; font-weight: 800; color: var(--text-dim);
   letter-spacing: .03em; text-transform: uppercase;
 }
-.field .hint { font-size: .76rem; color: var(--text-faint); font-weight: 600; }
+.hint { font-size: .76rem; color: var(--text-faint); font-weight: 600; line-height: 1.45; }
 
 input[type="text"], input[type="number"], input[type="date"], input[type="time"],
-input[type="search"], select, textarea {
+input[type="search"], input[type="password"], input[type="email"],
+input[type="tel"], input[type="url"], select, textarea {
   width: 100%;
   padding: 10px 12px;
   border: var(--border-w) solid var(--border);

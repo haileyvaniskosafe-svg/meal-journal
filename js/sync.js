@@ -151,6 +151,51 @@
     return global.location.origin + global.location.pathname;
   }
 
+  /**
+   * Password sign-in. Preferred over magic links here because Supabase's
+   * built-in email service allows only 2 messages an hour, which makes
+   * link-based sign-in painful when setting up a second device.
+   */
+  function signInWithPassword(email, password) {
+    if (!isConfigured()) return Promise.reject(new Error("Sync isn't set up yet."));
+    return api("/auth/v1/token?grant_type=password", {
+      method: "POST",
+      auth: false,
+      body: { email: String(email).trim(), password: password },
+    }).then(adoptSession).then(afterSignIn);
+  }
+
+  /**
+   * Create the account. Supabase only returns a session here when email
+   * confirmation is switched off for the project; otherwise it sends a
+   * confirmation mail and we have to say so.
+   */
+  function signUpWithPassword(email, password) {
+    if (!isConfigured()) return Promise.reject(new Error("Sync isn't set up yet."));
+    return api("/auth/v1/signup", {
+      method: "POST",
+      auth: false,
+      body: { email: String(email).trim(), password: password },
+    }).then(function (json) {
+      if (!json || !json.access_token) {
+        var err = new Error(
+          "Account created, but this project asks for email confirmation. " +
+          "Either check your inbox, or turn confirmation off in Supabase " +
+          "(Authentication → Sign In / Providers → Email)."
+        );
+        err.code = "needs_confirmation";
+        throw err;
+      }
+      return adoptSession(json);
+    }).then(afterSignIn);
+  }
+
+  function afterSignIn() {
+    setStatus("ok");
+    startPolling();
+    return sync().catch(function () { /* status already reflects it */ });
+  }
+
   /** Email the user a magic link back to this page. */
   function signIn(email) {
     if (!isConfigured()) return Promise.reject(new Error("Add your Supabase URL and key first."));
@@ -472,6 +517,8 @@
     onLocalChange: onLocalChange,
     sync: sync,
     signIn: signIn,
+    signInWithPassword: signInWithPassword,
+    signUpWithPassword: signUpWithPassword,
     signOut: signOut,
     handleAuthRedirect: handleAuthRedirect,
     isConfigured: isConfigured,

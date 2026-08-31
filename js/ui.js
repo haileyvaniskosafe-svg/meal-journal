@@ -398,7 +398,8 @@
       (opts.min != null ? ' min="' + opts.min + '"' : "") +
       (opts.max != null ? ' max="' + opts.max + '"' : "") +
       (opts.step != null ? ' step="' + opts.step + '"' : "") +
-      (opts.inputmode ? ' inputmode="' + opts.inputmode + '"' : "") + ">";
+      (opts.inputmode ? ' inputmode="' + opts.inputmode + '"' : "") +
+      (opts.autocomplete ? ' autocomplete="' + opts.autocomplete + '"' : "") + ">";
   }
   function textarea(name, value, placeholder) {
     return '<textarea name="' + attr(name) + '" placeholder="' + attr(placeholder || "") + '">' + esc(value || "") + "</textarea>";

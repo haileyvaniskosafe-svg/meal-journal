@@ -52,6 +52,18 @@ approved.
 > designed to be handed out to browsers; the service_role key bypasses all
 > security and should never go near a web page.
 
+## 4b. Turn off email confirmation ⚠️
+
+The app signs in with a password, which needs this off — otherwise creating your
+account sends a confirmation mail instead of signing you in, and Supabase's
+built-in mail allows only **2 messages an hour**.
+
+**Authentication → Sign In / Providers → Email** → turn **Confirm email** off.
+
+Once your account exists, come back to the same page and turn **Allow new users
+to sign up** off too. Only your account will work from then on, which is what you
+want for a personal tracker.
+
 ## 5. Connect the app
 
 If the project is already baked into `js/config.js` (it is, for this repo),
@@ -61,13 +73,17 @@ there's nothing to paste — skip to signing in.
 2. If it asks for a URL and key, paste them and hit **Connect**. Supabase's
    Connect dialog gives you a `.env` snippet; you can paste the whole thing
    into either field and both values get picked out.
-3. Enter your email, hit **Email me a sign-in link**.
-4. Open the email on that device and click the link. You'll land back in the app,
-   signed in, and your existing data uploads within a few seconds.
+3. Enter your email and a password, then hit **Create account** the first time
+   (**Sign in** on every device after that). Your data uploads within seconds.
+
+A one-time email link is still available under **Other ways in** — useful if you
+ever forget the password, but slow, because of the 2-per-hour cap on Supabase's
+built-in mail.
 
 ## 6. Add your other devices
 
-Open the app on your phone, Settings → Sync, and sign in with the **same email**.
+Open the app on your phone, Settings → Sync, and sign in with the **same email and
+password**.
 Everything already in the account downloads, and from then on both devices stay
 in step.
 
@@ -134,7 +150,10 @@ the table and everything in it.
 
 | What you see | Usually means |
 |---|---|
-| "Sign-in link" email never arrives | Check spam. Supabase's built-in email has a low hourly limit on free projects — wait a bit and retry. |
+| "email rate limit exceeded" | Supabase's built-in mail allows only 2/hour. Use the password sign-in instead — it sends no email at all. |
+| "Sign-in link" email never arrives | Check spam, and see the row above. |
+| "That email and password don't match" | On a new device use **Sign in**, not Create account — the account already exists. |
+| Signing up sends an email instead of signing you in | Step 4b — Confirm email is still on. |
 | Link opens an error page | Step 3 — the redirect URL isn't in the allow-list. |
 | "Sync problem" in Settings | Open the browser console. A 404 on `/rest/v1/records` means step 2 didn't run. |
 | "Session expired" | Just sign in again; the link is one tap. |

@@ -58,15 +58,28 @@
         "</div>";
     } else if (!signedIn) {
       body =
-        '<p class="muted tiny">Sign in and this device joins your sync. We\'ll email you a link — ' +
-          "no password to remember.</p>" +
+        '<p class="muted tiny">Sign in and this device joins your sync. Same email and ' +
+          "password on every device.</p>" +
         (cfg.builtIn ? '<p class="hint" style="margin-top:8px">Using this app&rsquo;s built-in project &mdash; nothing to paste.</p>' : "") +
         (Sync.lastError ? '<p class="tiny" style="color:var(--danger);margin-top:8px">' +
           UI.esc(Sync.lastError) + "</p>" : "") +
         '<div class="stack" style="gap:14px;margin-top:14px">' +
-          UI.field("Email", UI.input("syncEmail", cfg.email, { type: "text", placeholder: "you@example.com" })) +
-          '<button class="btn primary" data-act="sync-signin">' + UI.ico("upload") + "Email me a sign-in link</button>" +
-          '<button class="btn quiet sm" data-act="sync-forget">Use a different project</button>' +
+          UI.field("Email", UI.input("syncEmail", cfg.email,
+            { type: "text", placeholder: "you@example.com", autocomplete: "username" })) +
+          UI.field("Password", UI.input("syncPassword", "",
+            { type: "password", placeholder: "at least 6 characters", autocomplete: "current-password" })) +
+          '<div class="row tight">' +
+            '<button class="btn primary" data-act="pw-signin">' + UI.ico("signin") + "Sign in</button>" +
+            '<button class="btn ghost" data-act="pw-signup">' + UI.ico("plus") + "Create account</button>" +
+          "</div>" +
+          '<details><summary>Other ways in</summary>' +
+            '<p class="tiny faint" style="margin:8px 0 10px">A one-time link by email instead of a ' +
+              "password. Supabase&rsquo;s built-in mail allows only two an hour, so it can be slow.</p>" +
+            '<div class="row tight">' +
+              '<button class="btn ghost sm" data-act="sync-signin">' + UI.ico("upload") + "Email me a link</button>" +
+              '<button class="btn quiet sm" data-act="sync-forget">Use a different project</button>' +
+            "</div>" +
+          "</details>" +
         "</div>";
     } else {
       var last = Sync.lastSyncAt
@@ -304,6 +317,35 @@
         Sync.configChanged();
         App.refresh();
         UI.toast("Connected — now sign in", "check");
+      }
+      else if (act === "pw-signin" || act === "pw-signup") {
+        var emailEl = root.querySelector('[name="syncEmail"]');
+        var pwEl = root.querySelector('[name="syncPassword"]');
+        var email = (emailEl.value || "").trim();
+        var pw = pwEl.value || "";
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { UI.toast("Enter a valid email", "alert"); emailEl.focus(); return; }
+        if (pw.length < 6) { UI.toast("Password needs at least 6 characters", "alert"); pwEl.focus(); return; }
+
+        b.disabled = true;
+        var creating = act === "pw-signup";
+        var run = creating ? Sync.signUpWithPassword(email, pw) : Sync.signInWithPassword(email, pw);
+        run.then(function () {
+          Store.set("sync.email", email, true);
+          App.refresh();
+          UI.toast(creating ? "Account created — syncing" : "Signed in", "check");
+        }).catch(function (err) {
+          var msg = err.message || "Could not sign in";
+          // GoTrue's wording is opaque; say what actually went wrong
+          if (/invalid login credentials/i.test(msg)) {
+            msg = "That email and password don't match. If this device is new, use Create account.";
+          } else if (/already registered|already been registered/i.test(msg)) {
+            msg = "That account exists — use Sign in instead.";
+          } else if (/email not confirmed/i.test(msg)) {
+            msg = "This project still requires email confirmation. Turn it off in Supabase, or open the confirmation email.";
+          }
+          UI.toast(msg, "alert");
+          b.disabled = false;
+        });
       }
       else if (act === "sync-signin") {
         var email = (root.querySelector('[name="syncEmail"]').value || "").trim();
