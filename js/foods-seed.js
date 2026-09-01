@@ -13,20 +13,22 @@
      cal, protein, carbs, fat, fiber, sugar (g), sodium (mg)
    `waterOz` counts a drink toward the day's water.
    ============================================================ */
-window.FOOD_SEED_REV = 2;
+window.FOOD_SEED_REV = 3;
 
 window.FOOD_SEED = [
   {
+    // Label read: 1 bag (33 g) unpopped, makes about 5.5 cups popped.
     name: "SmartPop Butter Popcorn", brand: "Orville Redenbacher's",
-    serving: "1 mini bag, popped",
-    macros: { cal: 100, protein: 3, carbs: 20, fat: 2, fiber: 4, sugar: 0, sodium: 200 },
-    verified: false,
+    serving: "1 bag (33 g) — ~5.5 cups popped",
+    macros: { cal: 100, protein: 3, carbs: 22, fat: 2, fiber: 4, sugar: 0, sodium: 310 },
+    verified: true,
   },
   {
+    // Label read: 1 bottle (207 ml / 7 fl oz).
     name: "Oikos Pro Peach drink", brand: "Oikos",
-    serving: "1 bottle (7 fl oz)",
-    macros: { cal: 150, protein: 23, carbs: 9, fat: 3, fiber: 0, sugar: 6, sodium: 85 },
-    verified: false,
+    serving: "1 bottle (7 fl oz / 207 ml)",
+    macros: { cal: 120, protein: 23, carbs: 5, fat: 1.5, fiber: 0, sugar: 4, sodium: 120 },
+    verified: true,
   },
   {
     // Label read: 25 biscuits (60 g), cereal alone.
@@ -78,5 +80,20 @@ window.FOOD_SEED = [
     macros: { cal: 210, protein: 14, carbs: 10, fat: 13, fiber: 2, sugar: 1, sodium: 330 },
     verified: true,
     note: "Calories, fat, carbs and protein from Taco Casa. Fiber, sugar and sodium are estimates — they don't publish them.",
+  },
+  {
+    // Label read: 1 package (269 g).
+    name: "Salisbury Steak with Macaroni & Cheese", brand: "Lean Cuisine",
+    serving: "1 package (9.5 oz / 269 g)",
+    macros: { cal: 260, protein: 21, carbs: 27, fat: 7, fiber: 2, sugar: 3, sodium: 700 },
+    verified: true,
+  },
+  {
+    // Label read: 1 stick (28 g). Carbs and sugars both shown as "<1 g",
+    // recorded as 1 so they're never under-counted.
+    name: "String cheese", brand: "Great Value",
+    serving: "1 stick (28 g)",
+    macros: { cal: 80, protein: 7, carbs: 1, fat: 6, fiber: 0, sugar: 1, sodium: 190 },
+    verified: true,
   },
 ];
