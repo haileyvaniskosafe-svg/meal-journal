@@ -102,10 +102,7 @@
         '<div style="margin-top:14px">' +
           UI.field("Notes", UI.textarea("note", existing ? existing.note : "", "Prep notes, portion, how it sat with you…")) +
         "</div>" +
-        (existing
-          ? '<label class="check" style="margin-top:14px"><input type="checkbox" name="done"' +
-            (existing.done ? " checked" : "") + "> Already eaten</label>"
-          : ""),
+        "",
       foot:
         (existing
           ? '<button class="btn danger spread" data-del>' + UI.ico("trash") + "Delete</button>"
@@ -385,7 +382,7 @@
     var slots = Store.SLOTS.map(function (slot) {
       var meta = UI.SLOT_META[slot];
       var items = day[slot].map(function (m) {
-        return '<button class="meal' + (m.done ? " done" : "") + '" data-act="edit-meal" ' +
+        return '<button class="meal" data-act="edit-meal" ' +
                'data-iso="' + iso + '" data-slot="' + slot + '" data-id="' + m.id + '" ' +
                'title="' + UI.attr(m.note || m.name) + '">' +
                '<span class="meal-name">' + UI.esc(m.name) + "</span>" +

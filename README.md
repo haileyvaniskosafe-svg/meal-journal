@@ -45,7 +45,9 @@ To deploy by hand instead: `npx vercel --prod` from this folder.
 Your daily landing pad: shot countdown, water cups, this week's movement ring, today's four meal slots, and your latest weigh-in — all one tap from logging.
 
 ### 🍽️ Meal Plan
-A seven-day grid with breakfast / lunch / dinner / snacks. Tap any slot to add a meal. Tap a planned meal to mark it eaten, edit, or delete.
+A seven-day grid with breakfast / lunch / dinner / snacks. Tap any slot to add a meal, or tap a logged one to edit or delete it.
+
+There's no "eaten" checkbox: if a meal is on the day, it counts. One less tap, and the day's macros always reflect what's actually there.
 
 - **Favorites** — save any meal once, then drop it into a day with one tap.
 - **Day menu** (the ☰ on each day) — copy yesterday, copy to tomorrow, repeat across the rest of the week, or clear the day.

@@ -430,8 +430,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); widt
   min-width: 0;
 }
 .meal:hover { border-color: var(--border); background: var(--surface-3); }
-.meal.done { opacity: .5; }
-.meal.done .meal-name { text-decoration: line-through; }
 .meal-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .meal-macro { font-size: .68rem; color: var(--text-faint); font-weight: 800; flex: none; }
 .meal-add {

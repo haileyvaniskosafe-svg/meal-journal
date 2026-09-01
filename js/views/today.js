@@ -191,7 +191,7 @@
       var items = day[slot];
       var body = items.length
         ? items.map(function (m) {
-            return '<button class="meal' + (m.done ? " done" : "") + '" data-act="toggle-meal" ' +
+            return '<button class="meal" data-act="edit-meal" ' +
                    'data-slot="' + slot + '" data-id="' + m.id + '">' +
                    '<span class="meal-name">' + UI.esc(m.name) + "</span>" +
                    mealBadge(m) +
@@ -211,7 +211,9 @@
     return (
       '<div class="card">' +
         '<div class="card-head">' + UI.ico("pumpkin") + "<h2>Today's plate</h2>" +
-          '<span class="push">' + totals.done + " / " + totals.count + " eaten</span></div>" +
+          '<span class="push">' + (totals.count
+            ? totals.count + (totals.count === 1 ? " item" : " items")
+            : "") + "</span></div>" +
         '<div class="plate-slots">' + slots + "</div>" +
         (totals.count ? '<div class="row tight" style="margin-top:14px">' + UI.macroChips(totals.macros) + "</div>" : "") +
       "</div>"
@@ -323,11 +325,7 @@
       else if (act === "log-move")   { Views.move.openActivityModal(); }
       else if (act === "log-weight") { Views.progress.openWeightModal(); }
       else if (act === "add-meal")   { Views.meals.openMealModal(iso, btn.dataset.slot); }
-      else if (act === "toggle-meal") {
-        var slot = btn.dataset.slot, id = btn.dataset.id;
-        var item = Store.dayMeals(iso)[slot].find(function (m) { return m.id === id; });
-        if (item) Store.updateMeal(iso, slot, id, { done: !item.done });
-      }
+      else if (act === "edit-meal") { Views.meals.openMealModal(iso, btn.dataset.slot, btn.dataset.id); }
     });
   }
 

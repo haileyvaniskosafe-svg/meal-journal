@@ -370,7 +370,6 @@
       name: (item.name || "").trim() || "Untitled",
       note: item.note || "",
       macros: cleanMacros(item.macros || item),
-      done: !!item.done,
     });
     dayMeals(iso)[slot].push(entry);
     commit();
@@ -386,7 +385,6 @@
     if (!it) return null;
     if (patch.name !== undefined) it.name = String(patch.name).trim() || it.name;
     if (patch.note !== undefined) it.note = patch.note;
-    if (patch.done !== undefined) it.done = !!patch.done;
     if (patch.macros !== undefined) it.macros = cleanMacros(patch.macros);
     touch(it);
     commit();
@@ -421,7 +419,7 @@
       src[s].forEach(function (m) {
         dst[s].push(touch({
           id: uid(), date: toIso, slot: s, name: m.name, note: m.note,
-          macros: Object.assign({}, m.macros), done: false,
+          macros: Object.assign({}, m.macros),
         }));
         n++;
       });
@@ -442,11 +440,9 @@
   }
 
   function dayTotals(iso) {
-    var d = dayMeals(iso), count = 0, done = 0;
-    SLOTS.forEach(function (s) {
-      d[s].forEach(function (m) { count++; if (m.done) done++; });
-    });
-    return { count: count, done: done, macros: macroTotals(iso) };
+    var d = dayMeals(iso), count = 0;
+    SLOTS.forEach(function (s) { count += d[s].length; });
+    return { count: count, macros: macroTotals(iso) };
   }
 
   /* ---------- foods ----------
