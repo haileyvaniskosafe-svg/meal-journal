@@ -11,9 +11,13 @@
 
    Macros are per the stated serving:
      cal, protein, carbs, fat, fiber, sugar (g), sodium (mg)
-   `waterOz` counts a drink toward the day's water.
+   `waterOz` counts a drink toward the day's water. The rule: count it if
+   you drink it to quench thirst (water, Gatorade Zero), leave it at 0 if
+   you drink it for taste, caffeine or nutrition (soda, milk, coffee).
+   Strictly, those hydrate too — the line is about keeping the daily number
+   meaningful, not about physiology.
    ============================================================ */
-window.FOOD_SEED_REV = 4;
+window.FOOD_SEED_REV = 5;
 
 window.FOOD_SEED = [
   {
@@ -89,12 +93,13 @@ window.FOOD_SEED = [
     verified: true,
   },
   {
-    // Label read: 1 bottle (591 ml). Not counted as water — it's a sports
-    // drink rather than water. Set "counts as water" on it if you'd rather
-    // it topped up the day's total.
+    // Label read: 1 bottle (591 ml). Counts as water: it's a thirst
+    // quencher that's almost entirely water, and its sodium is tracked
+    // separately, so nothing is hidden by counting it.
     name: "Gatorade Zero, Glacier Freeze", brand: "Gatorade",
     serving: "1 bottle (20 fl oz / 591 ml)",
     macros: { cal: 5, protein: 0, carbs: 2, fat: 0, fiber: 0, sugar: 0, sodium: 270 },
+    waterOz: 20,
     verified: true,
   },
   {
