@@ -552,29 +552,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); widt
 .timeline-row .body b { display: block; font-size: .92rem; font-weight: 800; }
 .timeline-row .body span { font-size: .78rem; color: var(--text-faint); font-weight: 600; }
 
-/* ---------- week dots (consistency) ---------- */
-.weekdots { display: flex; gap: 6px; justify-content: space-between; }
-.weekdot { display: flex; flex-direction: column; gap: 4px; flex: 1; align-items: center; }
-.weekdot .wd {
-  width: 100%; max-width: 34px; aspect-ratio: 1;
-  display: grid; place-items: center;
-  border-radius: 9px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-soft);
-  color: var(--surface-3);
-}
-.weekdot .wd .ico { width: 14px; height: 14px; }
-.weekdot .wd.on {
-  background: color-mix(in srgb, var(--primary) 20%, var(--surface-2));
-  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
-  color: var(--primary);
-}
-.weekdot .wd.on.alt {
-  background: color-mix(in srgb, var(--accent) 20%, var(--surface-2));
-  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-  color: var(--accent);
-}
-
 /* ---------- chip with inline buttons ---------- */
 .chip .linkish, .chip .chip-x {
   border: 0; background: transparent; padding: 0; margin: 0;
@@ -728,3 +705,13 @@ button.chip[data-act="edit-water"] { cursor: pointer; }
 @media (max-width: 520px) {
   .foodrow-macros { display: none; }
 }
+
+/* a day with nothing logged is absent, not a zero */
+.barchart-col.muted {
+  background: repeating-linear-gradient(45deg,
+    transparent, transparent 3px,
+    color-mix(in srgb, var(--border-soft) 60%, transparent) 3px,
+    color-mix(in srgb, var(--border-soft) 60%, transparent) 6px);
+}
+/* a limit macro gone over reads red, not just "tall" */
+.barchart-fill.over { background: linear-gradient(180deg, var(--danger), var(--primary-2)); }

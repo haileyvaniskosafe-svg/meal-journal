@@ -1,11 +1,13 @@
 /* ============================================================
-   PROGRESS — weight trend, dose timeline, consistency.
+   PROGRESS — weight trend, dose timeline, macro history.
    ============================================================ */
 (function (global) {
   "use strict";
   var Views = (global.Views = global.Views || {});
 
-  var range = 90; // days shown in the weight chart
+  var range = 90;        // days shown in the weight chart
+  var macroRange = 14;   // days shown in the macro history chart
+  var macroKey = null;   // which macro is charted (null = first tracked)
   function D() { return Store.D; }
 
   /* ---------- weigh-in modal ---------- */
@@ -152,40 +154,83 @@
     );
   }
 
-  function consistencyCard() {
-    // last 8 weeks: shots logged, activity minutes, meals planned
-    var weeks = [];
-    var thisWeek = D().weekStart(D().today(), Store.settings.startDow);
-    for (var i = 7; i >= 0; i--) {
-      var ws = D().add(thisWeek, -7 * i);
-      var we = D().add(ws, 6);
-      var mins = Store.activitiesBetween(ws, we).reduce(function (t, a) { return t + a.minutes; }, 0);
-      var shot = Store.state.shots.some(function (s) { return s.date >= ws && s.date <= we; });
-      var meals = 0;
-      for (var d = 0; d < 7; d++) meals += Store.dayTotals(D().add(ws, d)).count;
-      weeks.push({ ws: ws, label: D().monthDay(ws).replace(/\s/, " "), mins: mins, shot: shot, meals: meals });
-    }
+  /* ---------- macro history ---------- */
 
-    var goal = Store.settings.activityGoal || 150;
+  /** The macro currently charted, kept valid if settings change under us. */
+  function activeMacro() {
+    var tracked = Store.trackedMacros();
+    if (!tracked.length) return null;
+    var found = macroKey && tracked.filter(function (m) { return m.key === macroKey; })[0];
+    return found || tracked[0];
+  }
+
+  function macroHistoryCard() {
+    var tracked = Store.trackedMacros();
+    var def = activeMacro();
+
+    if (!def) {
+      return '<div class="card">' + UI.empty("chart", "No macros tracked",
+        "Pick the macros you care about in Settings and your history shows up here.") + "</div>";
+    }
+    macroKey = def.key;
+
+    var sum = Store.macroSummary(def.key, macroRange);
+    var isLimit = def.type === "limit";
+
+    var chart;
+    if (!sum) {
+      chart = UI.empty("chart", "Nothing logged yet",
+        "Log a few meals and " + def.label.toLowerCase() + " history fills in here.");
+    } else {
+      // 30 days of labels won't fit, so thin the axis but keep every hover title
+      var step = macroRange > 21 ? 5 : macroRange > 10 ? 2 : 1;
+      var bars = sum.series.map(function (d, i) {
+        var last = i === sum.series.length - 1;
+        return {
+          label: D().monthDay(d.iso),
+          short: (last || i % step === 0) ? D().parse(d.iso).getDate() : "",
+          value: d.value,
+          muted: !d.logged,
+          highlight: last,
+          over: isLimit && sum.goal > 0 && d.value > sum.goal,
+        };
+      });
+
+      chart =
+        // three across at every width: the numbers shrink, the row never stacks
+        '<div class="grid" style="margin-bottom:16px;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))">' +
+          '<div class="stat"><span class="val">' + UI.fmt(sum.avg, def.decimals) +
+            (def.unit ? "<small>" + def.unit + "</small>" : "") +
+            '</span><span class="key">daily average</span></div>' +
+          '<div class="stat"><span class="val">' + UI.fmt(sum.goal, def.decimals) +
+            (def.unit ? "<small>" + def.unit + "</small>" : "") +
+            '</span><span class="key">' + (isLimit ? "limit" : "goal") + "</span></div>" +
+          '<div class="stat"><span class="val">' + sum.onTarget + '<small>/' + sum.loggedDays +
+            '</small></span><span class="key">' + (isLimit ? "days under" : "days met") + "</span></div>" +
+        "</div>" +
+        UI.barChart(bars, { goal: sum.goal, unit: def.unit ? " " + def.unit : "" }) +
+        '<p class="tiny faint center" style="margin-top:6px">' +
+          UI.esc(def.label) + " per day · dashed line is your " + UI.fmt(sum.goal, def.decimals) +
+          UI.esc(def.unit ? " " + def.unit : "") + " " + (isLimit ? "limit" : "goal") +
+          " · logged " + sum.loggedDays + " of " + sum.totalDays + " days</p>";
+    }
 
     return (
       '<div class="card">' +
-        '<div class="card-head">' + UI.ico("chart") + "<h2>Last 8 weeks</h2></div>" +
-        UI.barChart(weeks.map(function (w) {
-          return { label: w.label.split(" ")[1] || w.label, value: w.mins, highlight: w.ws === thisWeek };
-        }), { goal: goal, unit: " min" }) +
-        '<p class="tiny faint center" style="margin-top:6px">Activity minutes per week · dashed line is your ' + goal + '-minute goal</p>' +
-        '<hr class="divider">' +
-        '<div class="weekdots">' +
-          weeks.map(function (w) {
-            return '<div class="weekdot" title="' + UI.attr(D().monthDay(w.ws) + ": " +
-              (w.shot ? "shot logged" : "no shot") + ", " + w.meals + " meals planned") + '">' +
-              '<span class="wd ' + (w.shot ? "on" : "") + '">' + UI.ico("syringe") + "</span>" +
-              '<span class="wd ' + (w.meals ? "on alt" : "") + '">' + UI.ico("pumpkin") + "</span>" +
-              "</div>";
+        '<div class="card-head">' + UI.ico("chart") + "<h2>Macro history</h2>" +
+          '<div class="seg push" data-mrange>' +
+            [7, 14, 30].map(function (r) {
+              return '<button data-mr="' + r + '" aria-pressed="' + (r === macroRange) + '">' +
+                r + "d</button>";
+            }).join("") +
+          "</div></div>" +
+        '<div class="row tight" style="margin-bottom:14px" data-macros>' +
+          tracked.map(function (m) {
+            return '<button class="chip' + (m.key === def.key ? " on" : "") + '" data-mkey="' +
+              m.key + '" aria-pressed="' + (m.key === def.key) + '">' + UI.esc(m.label) + "</button>";
           }).join("") +
         "</div>" +
-        '<p class="tiny faint center" style="margin-top:8px">Shot logged · meals planned</p>' +
+        chart +
       "</div>"
     );
   }
@@ -219,15 +264,15 @@
     return (
       '<div class="page-head">' +
         '<div class="titles"><h1>Progress</h1>' +
-          '<p class="sub">The long view: weight, dose, and consistency.</p></div>' +
+          '<p class="sub">The long view: weight, dose, and macros.</p></div>' +
         '<div class="actions"><button class="btn primary sm" data-act="weigh">' +
           UI.ico("plus") + "Weigh in</button></div>" +
       "</div>" +
       weightCard() +
+      '<div style="margin-top:16px">' + macroHistoryCard() + "</div>" +
       '<div class="grid" data-collapse style="margin-top:16px;align-items:start;grid-template-columns:minmax(0,1fr) minmax(0,1fr)">' +
-        doseCard() + consistencyCard() +
-      "</div>" +
-      '<div style="margin-top:16px">' + weighInsCard() + "</div>"
+        doseCard() + weighInsCard() +
+      "</div>"
     );
   }
 
@@ -235,6 +280,10 @@
     root.addEventListener("click", function (e) {
       var r = e.target.closest("[data-range] button");
       if (r) { range = +r.dataset.r; App.refresh(); return; }
+      var mr = e.target.closest("[data-mrange] button");
+      if (mr) { macroRange = +mr.dataset.mr; App.refresh(); return; }
+      var mk = e.target.closest("[data-macros] [data-mkey]");
+      if (mk) { macroKey = mk.dataset.mkey; App.refresh(); return; }
       var b = e.target.closest("[data-act]");
       if (!b) return;
       if (b.dataset.act === "weigh") openWeightModal();

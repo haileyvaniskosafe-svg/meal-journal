@@ -366,9 +366,13 @@
 
     var cols = bars.map(function (b) {
       var h = (b.value / max) * 100;
-      return '<div class="barchart-col" title="' + attr(b.label + ": " + fmt(b.value) + (opts.unit || "")) + '">' +
-               '<div class="barchart-fill' + (b.highlight ? " on" : "") +
-                 '" style="height:' + (b.value > 0 ? Math.max(3, h) : 0).toFixed(1) + '%"></div>' +
+      var title = b.muted
+        ? b.label + ": nothing logged"
+        : b.label + ": " + fmt(b.value) + (opts.unit || "");
+      return '<div class="barchart-col' + (b.muted ? " muted" : "") + '" title="' + attr(title) + '">' +
+               (b.muted ? "" :
+                 '<div class="barchart-fill' + (b.highlight ? " on" : "") + (b.over ? " over" : "") +
+                   '" style="height:' + (b.value > 0 ? Math.max(3, h) : 0).toFixed(1) + '%"></div>') +
              "</div>";
     }).join("");
 
@@ -376,8 +380,9 @@
       ? '<div class="barchart-goal" style="bottom:' + ((opts.goal / max) * 100).toFixed(1) + '%"></div>'
       : "";
 
+    // `short` lets a long series thin its axis out without losing hover titles
     var labels = bars.map(function (b) {
-      return '<span class="barchart-lbl">' + esc(b.label) + "</span>";
+      return '<span class="barchart-lbl">' + esc(b.short != null ? b.short : b.label) + "</span>";
     }).join("");
 
     return '<div class="barchart">' +

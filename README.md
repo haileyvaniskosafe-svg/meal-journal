@@ -105,7 +105,9 @@ Built specifically around a weekly tirzepatide schedule.
 Log walks, strength, yoga, cycling and more with duration and intensity. Weekly ring against your minutes goal, a per-day bar chart, a breakdown by type, and a daily streak.
 
 ### 📈 Progress
-Weight trend chart (30d / 90d / 365d / all), change since start, progress toward your goal, the dose timeline, and an eight-week consistency view of activity minutes, shots logged, and meals planned.
+Weight trend chart (30d / 90d / 365d / all), change since start, progress toward your goal, and the dose timeline.
+
+**Macro history** charts any macro you track over 7, 14 or 30 days: daily bars against your goal line, your daily average, and how many days you hit the target (or stayed under the limit). Days you didn't log anything are hatched out and left out of the average — a zero for a day you simply forgot to record would drag the number down and mean nothing. Days over a limit turn red.
 
 ### 🎨 Theme
 See below — this is the fun part.

@@ -325,6 +325,45 @@
     return out;
   }
 
+  /** Daily values for one macro over the last `days` days, oldest first. */
+  function macroSeries(key, days) {
+    var out = [], today = D.today();
+    for (var i = days - 1; i >= 0; i--) {
+      var iso = D.add(today, -i);
+      var t = dayTotals(iso);
+      out.push({ iso: iso, value: t.macros[key] || 0, logged: t.count > 0 });
+    }
+    return out;
+  }
+
+  /**
+   * Summary of one macro over a window.
+   * Days with nothing logged are excluded: averaging a zero for a day you
+   * simply didn't record would drag the number down and mean nothing.
+   */
+  function macroSummary(key, days) {
+    var series = macroSeries(key, days);
+    var logged = series.filter(function (d) { return d.logged; });
+    if (!logged.length) return null;
+
+    var goal = macroGoal(key);
+    var def = macroDef(key) || { type: "target" };
+    var sum = logged.reduce(function (t, d) { return t + d.value; }, 0);
+    var onTarget = logged.filter(function (d) {
+      return def.type === "target" ? d.value >= goal : d.value <= goal;
+    }).length;
+
+    return {
+      series: series,
+      loggedDays: logged.length,
+      totalDays: days,
+      avg: sum / logged.length,
+      goal: goal,
+      onTarget: onTarget,
+      type: def.type,
+    };
+  }
+
   /**
    * How a day reads against a goal.
    * target: 100% is success, over is fine. limit: over is the failure case.
@@ -892,6 +931,7 @@
 
     trackedMacros: trackedMacros, macroGoal: macroGoal, macroDef: macroDef,
     macroTotals: macroTotals, macroAverages: macroAverages, macroStatus: macroStatus,
+    macroSeries: macroSeries, macroSummary: macroSummary,
 
     dayMeals: dayMeals, findMeal: findMeal, addMeal: addMeal, updateMeal: updateMeal,
     removeMeal: removeMeal, moveMeal: moveMeal, copyDay: copyDay, clearDay: clearDay,
