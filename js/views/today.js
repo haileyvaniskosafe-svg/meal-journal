@@ -168,11 +168,22 @@
     var list = Store.drinks();
     var chosen = null;   // null means plain water
 
+    /**
+     * Two bottled waters both read as "… Water" without their brand, so lead
+     * with it — unless the name already carries it, which would give us
+     * "Gatorade Gatorade Zero".
+     */
+    function drinkLabel(f) {
+      if (!f.brand) return f.name;
+      if (f.name.toLowerCase().indexOf(f.brand.toLowerCase()) >= 0) return f.name;
+      return f.brand + " " + f.name;
+    }
+
     function chipRow() {
       return '<button type="button" class="chip on" data-drink="">' + UI.ico("drop") + "Water</button>" +
         list.map(function (f) {
-          return '<button type="button" class="chip" data-drink="' + f.id + '">' +
-            UI.ico("mug") + UI.esc(f.name) + "</button>";
+          return '<button type="button" class="chip" data-drink="' + f.id + '" title="' +
+            UI.attr(f.serving) + '">' + UI.ico("mug") + UI.esc(drinkLabel(f)) + "</button>";
         }).join("");
     }
 
