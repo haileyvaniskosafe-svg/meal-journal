@@ -38,12 +38,27 @@
       "</div>";
   }
 
-  /** Pull macro_<key> fields back out of a read form. */
-  function readMacros(form) {
+  /**
+   * What to actually save. `macroFields` only draws inputs for the macros
+   * she tracks, so reading the form alone throws away everything else the
+   * food knew — log a rotisserie chicken while tracking calories, protein
+   * and fiber and its 1,100 mg of sodium disappears. So: the visible fields
+   * win for tracked macros (clearing one really does mean none), and
+   * untracked macros ride along from `base` — the food that was picked, or
+   * the meal being edited.
+   */
+  function mergeMacros(form, base) {
+    var tracked = {};
+    Store.trackedMacros().forEach(function (m) { tracked[m.key] = true; });
+
     var out = {};
     Store.MACROS.forEach(function (m) {
-      var v = form["macro_" + m.key];
-      if (v !== undefined && v !== "") out[m.key] = parseFloat(v) || 0;
+      if (tracked[m.key]) {
+        var v = form["macro_" + m.key];
+        if (v !== undefined && v !== "") out[m.key] = parseFloat(v) || 0;
+      } else if (base && base[m.key] != null && base[m.key] !== "") {
+        out[m.key] = base[m.key];
+      }
     });
     return out;
   }
@@ -114,6 +129,8 @@
         var resultsEl = h.$("[data-food-results]");
         var qtyEl = h.$('[name="qty"]');
         var servingEl = h.$("[data-serving]");
+        // full macro set behind the form, so untracked macros survive a save
+        var baseMacros = existing ? existing.macros : null;
 
         /** Write a macro set into the visible fields. */
         function writeMacros(macros) {
@@ -125,7 +142,8 @@
 
         function applyQty() {
           if (!picked) return;
-          writeMacros(Store.scaleMacros(picked.macros, qtyEl.value));
+          baseMacros = Store.scaleMacros(picked.macros, qtyEl.value);
+          writeMacros(baseMacros);
           var n = parseFloat(qtyEl.value) || 1;
           servingEl.textContent = (n === 1 ? "" : n + " × ") + picked.serving +
             (picked.brand ? " · " + picked.brand : "");
@@ -180,7 +198,7 @@
         h.$("[data-save]").addEventListener("click", function () {
           var v = UI.readForm(h.el);
           if (!v.name.trim()) { h.$('[name="name"]').focus(); return; }
-          v.macros = readMacros(v);
+          v.macros = mergeMacros(v, baseMacros);
           var cupsAdded = 0;
           if (picked) {
             Store.noteFoodUsed(picked.id);
@@ -204,7 +222,7 @@
           if (!v.name.trim()) { h.$('[name="name"]').focus(); return; }
           Store.addFood({
             name: v.name, serving: "1 serving",
-            macros: readMacros(v), note: v.note, verified: true,
+            macros: mergeMacros(v, baseMacros), note: v.note, verified: true,
           });
           UI.toast("Added to your foods", "check");
         });
@@ -357,7 +375,9 @@
         h.$("[data-save]").addEventListener("click", function () {
           var v = UI.readForm(h.el);
           if (!v.name.trim()) { h.$('[name="name"]').focus(); return; }
-          v.macros = readMacros(v);
+          // same rule here: editing a food while tracking three macros must
+          // not strip the four it doesn't draw a field for
+          v.macros = mergeMacros(v, existing && existing.macros);
           if (existing) Store.updateFood(existing.id, v);
           else Store.addFood(v);
           h.close();

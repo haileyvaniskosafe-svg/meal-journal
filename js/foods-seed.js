@@ -17,7 +17,7 @@
    Strictly, those hydrate too — the line is about keeping the daily number
    meaningful, not about physiology.
    ============================================================ */
-window.FOOD_SEED_REV = 7;
+window.FOOD_SEED_REV = 9;
 
 window.FOOD_SEED = [
   {
@@ -128,5 +128,16 @@ window.FOOD_SEED = [
     macros: { cal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 190 },
     verified: true,
     note: "Whole bag is ~3 servings: 0 cal, 570 mg sodium.",
+  },
+  {
+    // Label read off the pack: 3 oz serving — 130 cal, 6 g fat (2 g sat),
+    // 70 mg cholesterol, 430 mg sodium, 1 g carb, 0 fiber, 0 sugar, 19 g
+    // protein. Doubled here for a 6 oz portion. Net wt 48 oz (3.00 lb)
+    // gross, so servings per container is printed as "varied".
+    name: "Rotisserie chicken, 6 oz", brand: "Sam's Club (Member's Mark)",
+    serving: "6 oz (170 g)",
+    macros: { cal: 260, protein: 38, carbs: 2, fat: 12, fiber: 0, sugar: 0, sodium: 860 },
+    verified: true,
+    note: "Seasoned Rotisserie Chicken, fully cooked. Per the 3 oz panel, doubled. Also 4 g saturated fat and 140 mg cholesterol at this portion.",
   },
 ];
