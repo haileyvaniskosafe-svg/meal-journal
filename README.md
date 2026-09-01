@@ -62,10 +62,16 @@ Manage the library from the **My foods** card on the Meal Plan page.
 Each food stores macros **per serving**, with the serving spelled out (`25 biscuits (~60 g)`),
 so the numbers always mean something specific.
 
-> **The "unchecked" flag.** Seeded foods carry estimated macros, not values read off a
-> label. They show a ⚠ until you open one, check it against the packet, and tick
-> *Checked against the label*. Restaurant items are the least reliable — chains publish
-> little, and regional ones publish almost nothing.
+> **The "unchecked" flag.** A food shows a ⚠ until someone confirms its macros against
+> an actual label. Tick *Checked against the label* in the food editor and it clears.
+
+Drinks can carry a **counts as water** value in fl oz. Logging one tops up the day's
+water automatically — a 12 oz can of water is 12 oz of water, and shouldn't need logging
+twice.
+
+Updating the starter library (`js/foods-seed.js`) and bumping `FOOD_SEED_REV` pushes
+corrections to installs that already hold the old numbers — but only to foods you
+haven't edited. Anything you've changed yourself is yours and is never overwritten.
 
 ### 💧 Water
 

@@ -108,7 +108,8 @@
       },
       meals: {},
       foods: [],            // the searchable food database
-      seededFoods: false,   // starter library loaded once, then it's yours
+      seededFoods: false,   // legacy flag from the first seeding
+      seedRev: 0,           // highest starter-library revision applied
       favorites: [],        // legacy; folded into foods at schema 3
       shots: [],
       activities: [],
@@ -460,6 +461,9 @@
       brand: (src.brand !== undefined ? String(src.brand) : f.brand || "").trim(),
       serving: (src.serving !== undefined ? String(src.serving) : f.serving || "").trim() || "1 serving",
       macros: src.macros !== undefined ? cleanMacros(src.macros) : (f.macros || {}),
+      waterOz: src.waterOz !== undefined ? Math.max(0, num(src.waterOz)) : (f.waterOz || 0),
+      seedKey: src.seedKey !== undefined ? src.seedKey : (f.seedKey || ""),
+      userEdited: src.userEdited !== undefined ? !!src.userEdited : !!f.userEdited,
       note: src.note !== undefined ? src.note : (f.note || ""),
       fav: src.fav !== undefined ? !!src.fav : !!f.fav,
       verified: src.verified !== undefined ? !!src.verified : !!f.verified,
@@ -479,6 +483,8 @@
   function updateFood(id, patch) {
     var i = state.foods.findIndex(function (f) { return f.id === id; });
     if (i < 0) return null;
+    // Once you've edited a food it's yours; starter-library updates skip it.
+    if (patch.userEdited === undefined) patch = Object.assign({}, patch, { userEdited: true });
     state.foods[i] = cleanFood(patch, state.foods[i]);
     commit();
     return state.foods[i];
@@ -549,20 +555,51 @@
     return out;
   }
 
-  /** Load the starter library once. Never overwrites existing entries. */
-  function seedFoods(seed) {
-    if (state.seededFoods || !seed || !seed.length) return 0;
-    var have = {};
-    state.foods.forEach(function (f) { have[(f.brand + "|" + f.name).toLowerCase()] = true; });
-    var added = 0;
+  /**
+   * Apply the starter library.
+   *
+   * Runs on every load, but only does anything when the bundled revision is
+   * newer than the one already applied. New entries are added; existing ones
+   * are refreshed ONLY if you haven't edited them yourself — so corrected
+   * label data reaches an install that already has the old numbers, without
+   * ever overwriting your own changes.
+   */
+  function seedFoods(seed, rev) {
+    if (!seed || !seed.length) return { added: 0, updated: 0 };
+    rev = rev || 1;
+    if ((state.seedRev || 0) >= rev) return { added: 0, updated: 0 };
+
+    var byKey = {};
+    state.foods.forEach(function (f) { if (f.seedKey) byKey[f.seedKey] = f; });
+
+    var added = 0, updated = 0;
     seed.forEach(function (item) {
-      if (have[((item.brand || "") + "|" + item.name).toLowerCase()]) return;
-      state.foods.push(cleanFood(item));
-      added++;
+      var key = ((item.brand || "") + "|" + item.name).toLowerCase();
+      var existing = byKey[key];
+
+      if (!existing) {
+        // an earlier seeding predates seedKey, so match on name too
+        existing = state.foods.find(function (f) {
+          return !f.seedKey && (f.brand + "|" + f.name).toLowerCase() === key;
+        });
+      }
+
+      if (!existing) {
+        state.foods.push(cleanFood(Object.assign({ seedKey: key }, item)));
+        added++;
+      } else if (!existing.userEdited) {
+        Object.assign(existing, cleanFood(
+          Object.assign({ seedKey: key }, item),
+          { id: existing.id, useCount: existing.useCount, lastUsed: existing.lastUsed }
+        ));
+        updated++;
+      }
     });
+
+    state.seedRev = rev;
     state.seededFoods = true;
     commit(true);
-    return added;
+    return { added: added, updated: updated };
   }
 
   /* ---------- shots ---------- */
@@ -705,7 +742,8 @@
   /* ---------- water ---------- */
   function water(iso) { return state.water[iso || D.today()] || 0; }
   function setWater(iso, cups) {
-    var v = Math.max(0, Math.min(30, Math.round(num(cups))));
+    // One decimal: a drink logged in fl oz rarely lands on a whole cup.
+    var v = Math.max(0, Math.min(30, Math.round(num(cups) * 10) / 10));
     if (v === 0) delete state.water[iso];
     else state.water[iso] = v;
     state.waterAt = state.waterAt || {};
@@ -714,6 +752,18 @@
     return v;
   }
   function bumpWater(iso, delta) { return setWater(iso, water(iso) + delta); }
+
+  /**
+   * Count a drink toward the day's water.
+   * Returns the cups added, so the caller can say so.
+   */
+  function addWaterOz(iso, oz) {
+    var size = state.settings.cupSize || 8;
+    var cups = Math.round((num(oz) / size) * 10) / 10;
+    if (cups <= 0) return 0;
+    setWater(iso, water(iso) + cups);
+    return cups;
+  }
 
   /* ---------- weight ---------- */
   function addWeight(iso, value, silent) {
@@ -858,7 +908,7 @@
     activitiesOn: activitiesOn, activitiesBetween: activitiesBetween,
     weekMinutes: weekMinutes, moveStreak: moveStreak,
 
-    water: water, setWater: setWater, bumpWater: bumpWater,
+    water: water, setWater: setWater, bumpWater: bumpWater, addWaterOz: addWaterOz,
 
     addWeight: addWeight, removeWeight: removeWeight, weightsSorted: weightsSorted,
     latestWeight: latestWeight, weightChange: weightChange,

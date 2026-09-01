@@ -184,11 +184,22 @@
           var v = UI.readForm(h.el);
           if (!v.name.trim()) { h.$('[name="name"]').focus(); return; }
           v.macros = readMacros(v);
-          if (picked) Store.noteFoodUsed(picked.id);
+          var cupsAdded = 0;
+          if (picked) {
+            Store.noteFoodUsed(picked.id);
+            // A drink that is actually water counts toward the day's water too.
+            if (picked.waterOz && !existing) {
+              cupsAdded = Store.addWaterOz(iso, picked.waterOz * (parseFloat(qtyEl.value) || 1));
+            }
+          }
           if (existing) Store.updateMeal(iso, slot, existing.id, v);
           else Store.addMeal(iso, slot, v);
           h.close();
-          UI.toast(existing ? "Updated" : "Added to " + meta.label.toLowerCase());
+          UI.toast(
+            existing ? "Updated"
+              : cupsAdded ? "Added · +" + UI.fmt(cupsAdded, 1) + (cupsAdded === 1 ? " cup" : " cups") + " water"
+              : "Added to " + meta.label.toLowerCase()
+          );
         });
 
         h.$("[data-save-fav]").addEventListener("click", function () {
@@ -326,6 +337,12 @@
             "Macros below are for exactly this much.") +
         "</div>" +
         macroFields(existing && existing.macros) +
+        '<div style="margin-top:14px">' +
+          UI.field("Counts as water (fl oz)", UI.input("waterOz",
+            existing && existing.waterOz ? existing.waterOz : "",
+            { type: "number", min: 0, step: "0.5", inputmode: "decimal", placeholder: "0" }),
+            "For drinks that are actually water. Logging one tops up your water for the day.") +
+        "</div>" +
         '<label class="check" style="margin-top:14px"><input type="checkbox" name="verified"' +
           (existing && existing.verified ? " checked" : "") + "> Checked against the label</label>" +
         '<label class="check" style="margin-top:8px"><input type="checkbox" name="fav"' +

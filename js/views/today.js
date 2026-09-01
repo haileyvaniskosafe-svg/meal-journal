@@ -71,7 +71,7 @@
     var p = UI.pct(cups, goal);
 
     // show every cup drunk, even past the goal, so extra intake still reads
-    var shown = Math.max(goal, cups);
+    var shown = Math.max(goal, Math.ceil(cups));
     var dots = "";
     for (var i = 0; i < shown; i++) {
       var filled = i < cups;
@@ -88,7 +88,7 @@
       '<div class="card">' +
         '<div class="card-head">' + UI.ico("drop") + "<h2>Water</h2>" +
           '<button class="chip push" data-act="edit-water" title="Set an exact amount">' +
-            cups + " / " + goal + "</button></div>" +
+            UI.fmt(cups, 1) + " / " + goal + "</button></div>" +
         '<div class="waterdots">' + dots + "</div>" +
         UI.bar(p, cups >= goal ? "good" : "") +
         '<div class="row tight" style="margin-top:12px">' +

@@ -85,7 +85,7 @@
 
     Store.load();
     // Starter food library, added once and then owned by the user.
-    if (global.FOOD_SEED) Store.seedFoods(global.FOOD_SEED);
+    if (global.FOOD_SEED) Store.seedFoods(global.FOOD_SEED, global.FOOD_SEED_REV);
     Themes.init();
     Icons.hydrate(document);
 
