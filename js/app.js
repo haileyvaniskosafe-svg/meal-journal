@@ -84,6 +84,8 @@
     viewEl = document.getElementById("view");
 
     Store.load();
+    // Starter food library, added once and then owned by the user.
+    if (global.FOOD_SEED) Store.seedFoods(global.FOOD_SEED);
     Themes.init();
     Icons.hydrate(document);
 

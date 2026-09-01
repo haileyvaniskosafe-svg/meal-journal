@@ -50,6 +50,23 @@ A seven-day grid with breakfast / lunch / dinner / snacks. Tap any slot to add a
 - **Favorites** — save any meal once, then drop it into a day with one tap.
 - **Day menu** (the ☰ on each day) — copy yesterday, copy to tomorrow, repeat across the rest of the week, or clear the day.
 
+### 🔎 My foods
+
+A small database of the things *you* actually eat, so logging is a search and a tap
+rather than typing macros every time.
+
+Search by name or brand in the meal editor; picking a food fills in its macros, and a
+**quantity** box scales them (2 tacos = double). Foods you eat often rise to the top.
+Manage the library from the **My foods** card on the Meal Plan page.
+
+Each food stores macros **per serving**, with the serving spelled out (`25 biscuits (~60 g)`),
+so the numbers always mean something specific.
+
+> **The "unchecked" flag.** Seeded foods carry estimated macros, not values read off a
+> label. They show a ⚠ until you open one, check it against the packet, and tick
+> *Checked against the label*. Restaurant items are the least reliable — chains publish
+> little, and regional ones publish almost nothing.
+
 ### 💧 Water
 
 Tap a cup to set the count, or use − / +. Cups past your goal still show, so drinking extra

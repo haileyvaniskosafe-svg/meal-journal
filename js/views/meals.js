@@ -1,5 +1,5 @@
 /* ============================================================
-   MEALS — weekly meal planner with a reusable favorites library.
+   MEALS — weekly meal planner, backed by a searchable food database.
    ============================================================ */
 (function (global) {
   "use strict";
@@ -74,26 +74,30 @@
       ? Store.dayMeals(iso)[slot].find(function (m) { return m.id === existingId; })
       : null;
 
-    var favs = Store.state.favorites.filter(function (f) { return f.slot === slot; })
-      .concat(Store.state.favorites.filter(function (f) { return f.slot !== slot; }))
-      .slice(0, 12);
+    var picked = null;   // the food this entry came from, if any
 
-    var favHTML = favs.length
-      ? '<div class="field" style="margin-bottom:16px"><label>Quick pick</label><div class="row tight">' +
-          favs.map(function (f) {
-            return '<button type="button" class="chip" data-fav="' + f.id + '">' +
-              UI.ico(UI.SLOT_META[f.slot].icon) + UI.esc(f.name) + "</button>";
-          }).join("") +
-        "</div></div>"
-      : "";
+    var searchBlock =
+      '<div class="foodsearch" data-foodsearch>' +
+        '<div class="foodsearch-input">' + UI.ico("search") +
+          '<input type="search" data-food-q placeholder="Search your foods…" ' +
+            'autocomplete="off" aria-label="Search foods">' +
+        "</div>" +
+        '<div class="foodsearch-results" data-food-results></div>' +
+      "</div>";
 
     var m = UI.modal({
       title: (existing ? "Edit " : "Add to ") + D().dowName(iso, true) + " · " + meta.label,
       icon: meta.icon,
       submitOnEnter: true,
       body:
-        favHTML +
-        UI.field("What are you eating?", UI.input("name", existing ? existing.name : "", { placeholder: "e.g. Pumpkin chili" })) +
+        searchBlock +
+        '<div class="grid" style="grid-template-columns:minmax(0,3fr) minmax(0,1fr);gap:12px">' +
+          UI.field("What are you eating?", UI.input("name", existing ? existing.name : "",
+            { placeholder: "e.g. Pumpkin chili" })) +
+          UI.field("Qty", UI.input("qty", 1,
+            { type: "number", min: 0, step: "0.5", inputmode: "decimal" })) +
+        "</div>" +
+        '<p class="hint" data-serving style="margin-top:8px;display:none"></p>' +
         macroFields(existing && existing.macros) +
         '<div style="margin-top:14px">' +
           UI.field("Notes", UI.textarea("note", existing ? existing.note : "", "Prep notes, portion, how it sat with you…")) +
@@ -106,26 +110,81 @@
         (existing
           ? '<button class="btn danger spread" data-del>' + UI.ico("trash") + "Delete</button>"
           : '<span class="spread"></span>') +
-        '<button class="btn ghost" data-save-fav>' + UI.ico("star") + "Save as favorite</button>" +
+        '<button class="btn ghost" data-save-fav>' + UI.ico("plus") + "Save to my foods</button>" +
         '<button class="btn primary" data-primary data-save>' + UI.ico("check") + "Save</button>",
       onMount: function (h) {
-        h.$$("[data-fav]").forEach(function (b) {
-          b.addEventListener("click", function () {
-            var f = Store.state.favorites.find(function (x) { return x.id === b.dataset.fav; });
-            if (!f) return;
-            h.$('[name="name"]').value = f.name;
-            Store.MACROS.forEach(function (m) {
-              var input = h.$('[name="macro_' + m.key + '"]');
-              if (input) input.value = (f.macros && f.macros[m.key]) || "";
-            });
-            if (f.note) h.$('[name="note"]').value = f.note;
+        var qEl = h.$("[data-food-q]");
+        var resultsEl = h.$("[data-food-results]");
+        var qtyEl = h.$('[name="qty"]');
+        var servingEl = h.$("[data-serving]");
+
+        /** Write a macro set into the visible fields. */
+        function writeMacros(macros) {
+          Store.MACROS.forEach(function (m) {
+            var input = h.$('[name="macro_' + m.key + '"]');
+            if (input) input.value = (macros && macros[m.key]) || "";
           });
+        }
+
+        function applyQty() {
+          if (!picked) return;
+          writeMacros(Store.scaleMacros(picked.macros, qtyEl.value));
+          var n = parseFloat(qtyEl.value) || 1;
+          servingEl.textContent = (n === 1 ? "" : n + " × ") + picked.serving +
+            (picked.brand ? " · " + picked.brand : "");
+          servingEl.style.display = "";
+        }
+
+        function renderResults() {
+          // With nothing typed, show only a few most-used so the form below
+          // stays visible; widen once there's an actual query.
+          var q = qEl.value.trim();
+          var list = Store.searchFoods(q, q ? 6 : 3);
+          if (!list.length) {
+            resultsEl.innerHTML = qEl.value.trim()
+              ? '<p class="tiny faint" style="padding:8px 4px">No match. Type the name above and fill ' +
+                "in the macros — then save it to your foods.</p>"
+              : "";
+            return;
+          }
+          resultsEl.innerHTML = list.map(function (f) {
+            return '<button type="button" class="foodrow" data-pick="' + f.id + '">' +
+              '<span class="foodrow-main"><b>' + UI.esc(f.name) + "</b>" +
+                '<span>' + UI.esc([f.brand, f.serving].filter(Boolean).join(" · ")) + "</span></span>" +
+              '<span class="foodrow-macros">' + UI.fmt(f.macros.cal || 0) + " cal" +
+                (f.macros.protein ? " · " + UI.fmt(f.macros.protein) + "g P" : "") + "</span>" +
+              (f.verified ? "" : '<span class="foodrow-flag" title="Not checked against the label">' +
+                UI.ico("alert") + "</span>") +
+            "</button>";
+          }).join("");
+          Icons.hydrate(resultsEl);
+        }
+
+        qEl.addEventListener("input", renderResults);
+        renderResults();
+
+        resultsEl.addEventListener("click", function (e) {
+          var btn = e.target.closest("[data-pick]");
+          if (!btn) return;
+          var f = Store.getFood(btn.dataset.pick);
+          if (!f) return;
+          picked = f;
+          h.$('[name="name"]').value = f.name;
+          qtyEl.value = 1;
+          applyQty();
+          if (f.note && !h.$('[name="note"]').value) h.$('[name="note"]').value = f.note;
+          qEl.value = "";
+          renderResults();
+          h.$('[name="name"]').focus();
         });
+
+        qtyEl.addEventListener("input", applyQty);
 
         h.$("[data-save]").addEventListener("click", function () {
           var v = UI.readForm(h.el);
           if (!v.name.trim()) { h.$('[name="name"]').focus(); return; }
           v.macros = readMacros(v);
+          if (picked) Store.noteFoodUsed(picked.id);
           if (existing) Store.updateMeal(iso, slot, existing.id, v);
           else Store.addMeal(iso, slot, v);
           h.close();
@@ -135,8 +194,11 @@
         h.$("[data-save-fav]").addEventListener("click", function () {
           var v = UI.readForm(h.el);
           if (!v.name.trim()) { h.$('[name="name"]').focus(); return; }
-          Store.addFavorite({ name: v.name, slot: slot, macros: readMacros(v), note: v.note });
-          UI.toast("Saved to favorites", "star");
+          Store.addFood({
+            name: v.name, serving: "1 serving",
+            macros: readMacros(v), note: v.note, verified: true,
+          });
+          UI.toast("Added to your foods", "check");
         });
 
         var del = h.$("[data-del]");
@@ -198,48 +260,76 @@
     });
   }
 
-  /* ---------- favorites ---------- */
-  function favoritesCard() {
-    var favs = Store.state.favorites;
+  /* ---------- food library ---------- */
+  var libQuery = "";
+
+  function foodsCard() {
+    var all = Store.state.foods;
+    var list = Store.searchFoods(libQuery, 24);
+    var unverified = all.filter(function (f) { return !f.verified; }).length;
+
     return (
       '<div class="card">' +
-        '<div class="card-head">' + UI.ico("star") + "<h2>Favorites</h2>" +
-          '<button class="btn sm ghost push" data-act="add-fav">' + UI.ico("plus") + "New</button></div>" +
-        (favs.length
-          ? '<p class="tiny faint" style="margin-bottom:10px">Tap a favorite to drop it into today.</p>' +
-            '<div class="row tight">' + favs.map(function (f) {
-              var macroHint = f.macros && f.macros.cal ? " · " + UI.fmt(f.macros.cal) + " cal"
-                : f.macros && f.macros.protein ? " · " + UI.fmt(f.macros.protein) + "g protein" : "";
-              return '<span class="chip"><button class="linkish" data-act="use-fav" data-id="' + f.id + '">' +
-                UI.ico(UI.SLOT_META[f.slot].icon) + UI.esc(f.name) + UI.esc(macroHint) + "</button>" +
-                '<button class="chip-x" data-act="edit-fav" data-id="' + f.id + '" aria-label="Edit ' +
-                UI.attr(f.name) + '">' + UI.ico("edit") + "</button>" +
-                '<button class="chip-x" data-act="del-fav" data-id="' + f.id + '" aria-label="Delete ' +
-                UI.attr(f.name) + '">' + UI.ico("x") + "</button></span>";
-            }).join("") + "</div>"
-          : '<p class="muted tiny">Meals you save as favorites show up here for one-tap planning.</p>') +
+        '<div class="card-head">' + UI.ico("book") + "<h2>My foods</h2>" +
+          '<div class="row tight push">' +
+            (unverified ? '<span class="chip warn">' + UI.ico("alert") + unverified + " unchecked</span>" : "") +
+            '<button class="btn sm primary" data-act="add-food">' + UI.ico("plus") + "New food</button>" +
+          "</div></div>" +
+
+        (all.length
+          ? '<div class="foodsearch-input" style="margin-bottom:12px">' + UI.ico("search") +
+              '<input type="search" data-lib-q value="' + UI.attr(libQuery) +
+              '" placeholder="Search ' + all.length + ' foods…" autocomplete="off" aria-label="Search foods">' +
+            "</div>" +
+            (list.length
+              ? '<div class="foodlist">' + list.map(function (f) {
+                  return '<button class="foodrow" data-act="edit-food" data-id="' + f.id + '">' +
+                    '<span class="foodrow-main"><b>' + UI.esc(f.name) + "</b>" +
+                      '<span>' + UI.esc([f.brand, f.serving].filter(Boolean).join(" · ")) +
+                      (f.useCount ? " · eaten " + f.useCount + "×" : "") + "</span></span>" +
+                    '<span class="foodrow-macros">' + UI.fmt(f.macros.cal || 0) + " cal" +
+                      (f.macros.protein ? " · " + UI.fmt(f.macros.protein) + "g P" : "") + "</span>" +
+                    (f.verified ? "" : '<span class="foodrow-flag" title="Not checked against the label">' +
+                      UI.ico("alert") + "</span>") +
+                  "</button>";
+                }).join("") + "</div>"
+              : '<p class="tiny faint" style="padding:6px 2px">Nothing matches that.</p>')
+          : '<p class="muted tiny">Nothing here yet. Add the things you eat often and they become ' +
+            "one-tap when you log a meal.</p>") +
+
+        (unverified
+          ? '<p class="hint" style="margin-top:12px">' + UI.ico("alert") +
+            " Flagged items were estimated, not read off the label. Open one, check the numbers " +
+            "against the packet, and tick <b>Checked against the label</b>.</p>"
+          : "") +
       "</div>"
     );
   }
 
-  function openFavModal(existingId) {
-    var existing = existingId
-      ? Store.state.favorites.find(function (f) { return f.id === existingId; })
-      : null;
+  function openFoodModal(existingId) {
+    var existing = existingId ? Store.getFood(existingId) : null;
 
     UI.modal({
-      title: existing ? "Edit favorite" : "New favorite",
-      icon: "star",
+      title: existing ? "Edit food" : "New food",
+      icon: "book",
       submitOnEnter: true,
       body:
-        UI.field("Name", UI.input("name", existing ? existing.name : "",
-          { placeholder: "e.g. Greek yogurt + berries" })) +
+        '<div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px">' +
+          UI.field("Name", UI.input("name", existing ? existing.name : "",
+            { placeholder: "e.g. Frosted Mini-Wheats" })) +
+          UI.field("Brand", UI.input("brand", existing ? existing.brand : "",
+            { placeholder: "optional" })) +
+        "</div>" +
         '<div style="margin-top:14px">' +
-          UI.field("Usual slot", UI.select("slot", Store.SLOTS.map(function (s) {
-            return { value: s, label: UI.SLOT_META[s].label };
-          }), existing ? existing.slot : "breakfast")) +
+          UI.field("One serving is", UI.input("serving", existing ? existing.serving : "",
+            { placeholder: "e.g. 25 biscuits (~60 g)" }),
+            "Macros below are for exactly this much.") +
         "</div>" +
         macroFields(existing && existing.macros) +
+        '<label class="check" style="margin-top:14px"><input type="checkbox" name="verified"' +
+          (existing && existing.verified ? " checked" : "") + "> Checked against the label</label>" +
+        '<label class="check" style="margin-top:8px"><input type="checkbox" name="fav"' +
+          (existing && existing.fav ? " checked" : "") + "> Favourite</label>" +
         '<div style="margin-top:14px">' +
           UI.field("Notes", UI.textarea("note", existing ? existing.note : "", "Optional")) +
         "</div>",
@@ -254,14 +344,14 @@
           var v = UI.readForm(h.el);
           if (!v.name.trim()) { h.$('[name="name"]').focus(); return; }
           v.macros = readMacros(v);
-          if (existing) Store.updateFavorite(existing.id, v);
-          else Store.addFavorite(v);
+          if (existing) Store.updateFood(existing.id, v);
+          else Store.addFood(v);
           h.close();
-          UI.toast(existing ? "Favorite updated" : "Favorite saved", "star");
+          UI.toast(existing ? "Updated" : "Added to your foods", "check");
         });
         var del = h.$("[data-del]");
         if (del) del.addEventListener("click", function () {
-          var token = Store.removeFavorite(existing.id);
+          var token = Store.removeFood(existing.id);
           h.close();
           UI.undoToast("Deleted " + existing.name, token);
         });
@@ -340,11 +430,32 @@
           "</div>"
         : "") +
       '<div class="weekgrid">' + list.map(dayColumn).join("") + "</div>" +
-      '<div style="margin-top:16px">' + favoritesCard() + "</div>"
+      '<div style="margin-top:16px">' + foodsCard() + "</div>"
     );
   }
 
   function mount(root) {
+    root.addEventListener("input", function (e) {
+      if (!e.target.matches("[data-lib-q]")) return;
+      // Re-render only the list, so the search box keeps focus and cursor.
+      libQuery = e.target.value;
+      var card = e.target.closest(".card");
+      var listEl = card.querySelector(".foodlist");
+      var results = Store.searchFoods(libQuery, 24);
+      if (!listEl) return;
+      listEl.innerHTML = results.map(function (f) {
+        return '<button class="foodrow" data-act="edit-food" data-id="' + f.id + '">' +
+          '<span class="foodrow-main"><b>' + UI.esc(f.name) + "</b>" +
+            '<span>' + UI.esc([f.brand, f.serving].filter(Boolean).join(" · ")) +
+            (f.useCount ? " · eaten " + f.useCount + "×" : "") + "</span></span>" +
+          '<span class="foodrow-macros">' + UI.fmt(f.macros.cal || 0) + " cal" +
+            (f.macros.protein ? " · " + UI.fmt(f.macros.protein) + "g P" : "") + "</span>" +
+          (f.verified ? "" : '<span class="foodrow-flag">' + UI.ico("alert") + "</span>") +
+        "</button>";
+      }).join("") || '<p class="tiny faint" style="padding:6px 2px">Nothing matches that.</p>';
+      Icons.hydrate(listEl);
+    });
+
     root.addEventListener("click", function (e) {
       var b = e.target.closest("[data-act]");
       if (!b) return;
@@ -356,19 +467,8 @@
       else if (act === "add-meal")  { openMealModal(b.dataset.iso, b.dataset.slot); }
       else if (act === "edit-meal") { openMealModal(b.dataset.iso, b.dataset.slot, b.dataset.id); }
       else if (act === "day-menu")  { openDayMenu(b.dataset.iso); }
-      else if (act === "add-fav")   { openFavModal(); }
-      else if (act === "edit-fav")  { openFavModal(b.dataset.id); }
-      else if (act === "del-fav") {
-        var fav = Store.state.favorites.find(function (x) { return x.id === b.dataset.id; });
-        UI.undoToast("Deleted " + (fav ? fav.name : "favorite"), Store.removeFavorite(b.dataset.id));
-      }
-      else if (act === "use-fav") {
-        var f = Store.state.favorites.find(function (x) { return x.id === b.dataset.id; });
-        if (f) {
-          Store.addMeal(D().today(), f.slot, f);
-          UI.toast("Added to today's " + UI.SLOT_META[f.slot].label.toLowerCase());
-        }
-      }
+      else if (act === "add-food")  { openFoodModal(); }
+      else if (act === "edit-food") { openFoodModal(b.dataset.id); }
     });
   }
 
@@ -376,6 +476,7 @@
     render: render,
     mount: mount,
     openMealModal: openMealModal,
+    openFoodModal: openFoodModal,
     /** Let other views jump the planner to a given week. */
     gotoWeek: function (iso) { weekStart = D().weekStart(iso, Store.settings.startDow); },
   };

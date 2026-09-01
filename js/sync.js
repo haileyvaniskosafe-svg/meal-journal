@@ -251,7 +251,7 @@
   }
 
   /* ---------- local <-> record mapping ---------- */
-  var ARRAY_KINDS = { shot: "shots", activity: "activities", weight: "weights", favorite: "favorites" };
+  var ARRAY_KINDS = { shot: "shots", activity: "activities", weight: "weights", food: "foods" };
 
   /** Flatten local state into sync records. */
   function localRecords() {
@@ -355,6 +355,14 @@
       var day = Store.dayMeals(data.date || Store.D.today());
       var slot = Store.SLOTS.indexOf(data.slot) >= 0 ? data.slot : "snack";
       day[slot].push(data);
+    } else if (kind === "favorite") {
+      // Rows written by a device still on schema 2. Land them as foods.
+      var asFood = { name: data.name, brand: "", serving: "1 serving",
+                     macros: data.macros || {}, fav: true, verified: false };
+      var known = s.foods.findIndex(function (f) { return f.id === data.id; });
+      if (known >= 0) s.foods[known] = Object.assign(s.foods[known], asFood);
+      else s.foods.push(Object.assign({ id: data.id, useCount: 0, lastUsed: null,
+                                        updatedAt: rec.updatedAt }, asFood));
     } else if (ARRAY_KINDS[kind]) {
       var arr = s[ARRAY_KINDS[kind]] || (s[ARRAY_KINDS[kind]] = []);
       var i = arr.findIndex(function (r) { return r.id === id; });

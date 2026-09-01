@@ -11,7 +11,7 @@
   "use strict";
 
   var KEY = "cauldron.v1";
-  var SCHEMA = 2;
+  var SCHEMA = 3;
 
   /* ---------- date helpers ---------- */
   var D = {
@@ -107,7 +107,9 @@
         macroGoals: { cal: 1500, protein: 100, fiber: 25, carbs: 150, fat: 60, sugar: 40, sodium: 2300 },
       },
       meals: {},
-      favorites: [],
+      foods: [],            // the searchable food database
+      seededFoods: false,   // starter library loaded once, then it's yours
+      favorites: [],        // legacy; folded into foods at schema 3
       shots: [],
       activities: [],
       water: {},
@@ -221,6 +223,20 @@
       if (s.settings) delete s.settings.proteinGoal;
     }
 
+    if (from < 3) {
+      // Favorites were a weaker version of the same idea. Fold them in.
+      s.foods = s.foods || [];
+      (s.favorites || []).forEach(function (f) {
+        s.foods.push({
+          id: f.id, name: f.name, brand: "", serving: "1 serving",
+          macros: f.macros || {}, note: f.note || "",
+          fav: true, verified: false, slot: f.slot,
+          useCount: 0, lastUsed: null, updatedAt: f.updatedAt || now(),
+        });
+      });
+      s.favorites = [];
+    }
+
     // Backfill the sync bookkeeping every record needs.
     var t = now();
     Object.keys(s.meals || {}).forEach(function (iso) {
@@ -232,10 +248,11 @@
         });
       });
     });
-    ["favorites", "shots", "activities", "weights"].forEach(function (k) {
+    ["favorites", "foods", "shots", "activities", "weights"].forEach(function (k) {
       (s[k] || []).forEach(function (r) { if (!r.updatedAt) r.updatedAt = t; });
     });
     if (!Array.isArray(s.tombstones)) s.tombstones = [];
+    if (!Array.isArray(s.foods)) s.foods = [];
     if (!s.waterAt || typeof s.waterAt !== "object") s.waterAt = {};
     Object.keys(s.water || {}).forEach(function (iso) { if (!s.waterAt[iso]) s.waterAt[iso] = t; });
     if (!s.settingsAt) s.settingsAt = t;
@@ -431,37 +448,121 @@
     return { count: count, done: done, macros: macroTotals(iso) };
   }
 
-  /* ---------- favorites ---------- */
-  function addFavorite(fav) {
-    var f = touch({
-      id: uid(),
-      name: (fav.name || "").trim() || "Untitled",
-      slot: SLOTS.indexOf(fav.slot) >= 0 ? fav.slot : "dinner",
-      macros: cleanMacros(fav.macros || fav),
-      note: fav.note || "",
-    });
-    state.favorites.push(f);
+  /* ---------- foods ----------
+     A small, personal database: the things actually eaten, with the
+     macros for one serving. Kept local so search stays instant. */
+
+  function cleanFood(src, existing) {
+    var f = existing || {};
+    return {
+      id: f.id || uid(),
+      name: (src.name !== undefined ? String(src.name) : f.name || "").trim() || "Untitled",
+      brand: (src.brand !== undefined ? String(src.brand) : f.brand || "").trim(),
+      serving: (src.serving !== undefined ? String(src.serving) : f.serving || "").trim() || "1 serving",
+      macros: src.macros !== undefined ? cleanMacros(src.macros) : (f.macros || {}),
+      note: src.note !== undefined ? src.note : (f.note || ""),
+      fav: src.fav !== undefined ? !!src.fav : !!f.fav,
+      verified: src.verified !== undefined ? !!src.verified : !!f.verified,
+      useCount: f.useCount || 0,
+      lastUsed: f.lastUsed || null,
+      updatedAt: now(),
+    };
+  }
+
+  function addFood(src) {
+    var f = cleanFood(src);
+    state.foods.push(f);
     commit();
     return f;
   }
-  function updateFavorite(id, patch) {
-    var f = state.favorites.find(function (x) { return x.id === id; });
-    if (!f) return null;
-    if (patch.name !== undefined) f.name = String(patch.name).trim() || f.name;
-    if (patch.slot !== undefined && SLOTS.indexOf(patch.slot) >= 0) f.slot = patch.slot;
-    if (patch.note !== undefined) f.note = patch.note;
-    if (patch.macros !== undefined) f.macros = cleanMacros(patch.macros);
-    touch(f);
-    commit();
-    return f;
-  }
-  function removeFavorite(id) {
-    var i = state.favorites.findIndex(function (f) { return f.id === id; });
+
+  function updateFood(id, patch) {
+    var i = state.foods.findIndex(function (f) { return f.id === id; });
     if (i < 0) return null;
-    var rec = state.favorites.splice(i, 1)[0];
-    tomb("favorite", id);
+    state.foods[i] = cleanFood(patch, state.foods[i]);
     commit();
-    return { kind: "favorite", index: i, record: rec };
+    return state.foods[i];
+  }
+
+  function removeFood(id) {
+    var i = state.foods.findIndex(function (f) { return f.id === id; });
+    if (i < 0) return null;
+    var rec = state.foods.splice(i, 1)[0];
+    tomb("food", id);
+    commit();
+    return { kind: "food", index: i, record: rec };
+  }
+
+  function getFood(id) {
+    return state.foods.find(function (f) { return f.id === id; }) || null;
+  }
+
+  /** Bump usage so the things eaten often float to the top of search. */
+  function noteFoodUsed(id) {
+    var f = getFood(id);
+    if (!f) return;
+    f.useCount = (f.useCount || 0) + 1;
+    f.lastUsed = D.today();
+    f.updatedAt = now();
+    commit(true);
+  }
+
+  /**
+   * Substring search over name and brand.
+   * Ranking, in order: name starts with the query, then brand match,
+   * then how often it's eaten, then favourites, then alphabetical.
+   * With no query, returns the most-used first — which is what you
+   * want when the search box is still empty.
+   */
+  function searchFoods(query, limit) {
+    var q = String(query || "").trim().toLowerCase();
+    var list = state.foods.slice();
+
+    if (q) {
+      list = list.filter(function (f) {
+        return (f.name + " " + f.brand).toLowerCase().indexOf(q) >= 0;
+      });
+    }
+
+    list.sort(function (a, b) {
+      if (q) {
+        var an = a.name.toLowerCase().indexOf(q) === 0 ? 0 : 1;
+        var bn = b.name.toLowerCase().indexOf(q) === 0 ? 0 : 1;
+        if (an !== bn) return an - bn;
+      }
+      if ((b.useCount || 0) !== (a.useCount || 0)) return (b.useCount || 0) - (a.useCount || 0);
+      if (!!b.fav !== !!a.fav) return b.fav ? 1 : -1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return limit ? list.slice(0, limit) : list;
+  }
+
+  /** Scale a food's macros for a quantity, e.g. 2 tacos. */
+  function scaleMacros(macros, qty) {
+    var n = parseFloat(qty);
+    if (!isFinite(n) || n <= 0) n = 1;
+    var out = {};
+    Object.keys(macros || {}).forEach(function (k) {
+      out[k] = Math.round(macros[k] * n * 100) / 100;
+    });
+    return out;
+  }
+
+  /** Load the starter library once. Never overwrites existing entries. */
+  function seedFoods(seed) {
+    if (state.seededFoods || !seed || !seed.length) return 0;
+    var have = {};
+    state.foods.forEach(function (f) { have[(f.brand + "|" + f.name).toLowerCase()] = true; });
+    var added = 0;
+    seed.forEach(function (item) {
+      if (have[((item.brand || "") + "|" + item.name).toLowerCase()]) return;
+      state.foods.push(cleanFood(item));
+      added++;
+    });
+    state.seededFoods = true;
+    commit(true);
+    return added;
   }
 
   /* ---------- shots ---------- */
@@ -669,9 +770,9 @@
     } else if (token.kind === "weight") {
       state.weights.splice(Math.min(token.index, state.weights.length), 0, touch(token.record));
       untomb("weight", token.record.id);
-    } else if (token.kind === "favorite") {
-      state.favorites.splice(Math.min(token.index, state.favorites.length), 0, touch(token.record));
-      untomb("favorite", token.record.id);
+    } else if (token.kind === "food") {
+      state.foods.splice(Math.min(token.index, state.foods.length), 0, touch(token.record));
+      untomb("food", token.record.id);
     } else {
       return false;
     }
@@ -697,7 +798,7 @@
       merged.shots = unionById(state.shots, incoming.shots);
       merged.activities = unionById(state.activities, incoming.activities);
       merged.weights = unionById(state.weights, incoming.weights);
-      merged.favorites = unionById(state.favorites, incoming.favorites);
+      merged.foods = unionById(state.foods, incoming.foods);
       state = migrate(merged);
     } else {
       state = migrate(deepMerge(defaults(), incoming));
@@ -745,7 +846,9 @@
     removeMeal: removeMeal, moveMeal: moveMeal, copyDay: copyDay, clearDay: clearDay,
     dayTotals: dayTotals,
 
-    addFavorite: addFavorite, updateFavorite: updateFavorite, removeFavorite: removeFavorite,
+    addFood: addFood, updateFood: updateFood, removeFood: removeFood, getFood: getFood,
+    searchFoods: searchFoods, noteFoodUsed: noteFoodUsed, scaleMacros: scaleMacros,
+    seedFoods: seedFoods, cleanMacros: cleanMacros,
 
     shotsSorted: shotsSorted, lastShot: lastShot, addShot: addShot, updateShot: updateShot,
     removeShot: removeShot, suggestSite: suggestSite, siteLabel: siteLabel,
