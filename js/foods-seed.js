@@ -17,7 +17,7 @@
    Strictly, those hydrate too — the line is about keeping the daily number
    meaningful, not about physiology.
    ============================================================ */
-window.FOOD_SEED_REV = 5;
+window.FOOD_SEED_REV = 6;
 
 window.FOOD_SEED = [
   {
@@ -91,6 +91,14 @@ window.FOOD_SEED = [
     serving: "1 package (9.5 oz / 269 g)",
     macros: { cal: 260, protein: 21, carbs: 27, fat: 7, fiber: 2, sugar: 3, sodium: 700 },
     verified: true,
+  },
+  {
+    // Label read: 1 sandwich (127 g), 4 per box.
+    name: "Honey Wheat English Muffin sandwich", brand: "Jimmy Dean Delights",
+    serving: "1 sandwich (127 g)",
+    macros: { cal: 230, protein: 14, carbs: 32, fat: 5, fiber: 2, sugar: 4, sodium: 690 },
+    verified: true,
+    note: "Canadian bacon, egg white & cheese.",
   },
   {
     // Label read: 1 bottle (591 ml). Counts as water: it's a thirst
