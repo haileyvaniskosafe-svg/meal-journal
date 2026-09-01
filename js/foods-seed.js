@@ -13,7 +13,7 @@
      cal, protein, carbs, fat, fiber, sugar (g), sodium (mg)
    `waterOz` counts a drink toward the day's water.
    ============================================================ */
-window.FOOD_SEED_REV = 3;
+window.FOOD_SEED_REV = 4;
 
 window.FOOD_SEED = [
   {
@@ -86,6 +86,15 @@ window.FOOD_SEED = [
     name: "Salisbury Steak with Macaroni & Cheese", brand: "Lean Cuisine",
     serving: "1 package (9.5 oz / 269 g)",
     macros: { cal: 260, protein: 21, carbs: 27, fat: 7, fiber: 2, sugar: 3, sodium: 700 },
+    verified: true,
+  },
+  {
+    // Label read: 1 bottle (591 ml). Not counted as water — it's a sports
+    // drink rather than water. Set "counts as water" on it if you'd rather
+    // it topped up the day's total.
+    name: "Gatorade Zero, Glacier Freeze", brand: "Gatorade",
+    serving: "1 bottle (20 fl oz / 591 ml)",
+    macros: { cal: 5, protein: 0, carbs: 2, fat: 0, fiber: 0, sugar: 0, sodium: 270 },
     verified: true,
   },
   {
