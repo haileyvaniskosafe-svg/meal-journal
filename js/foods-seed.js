@@ -17,7 +17,7 @@
    Strictly, those hydrate too — the line is about keeping the daily number
    meaningful, not about physiology.
    ============================================================ */
-window.FOOD_SEED_REV = 10;
+window.FOOD_SEED_REV = 11;
 
 window.FOOD_SEED = [
   {
@@ -141,13 +141,14 @@ window.FOOD_SEED = [
     note: "Seasoned Rotisserie Chicken, fully cooked. Per the 3 oz panel, doubled. Also 4 g saturated fat and 140 mg cholesterol at this portion.",
   },
   {
-    // 500 mL (16.9 fl oz) bottle, the size in the 24-pack. Water, so the
-    // panel is zeros throughout. FIJI carries a few milligrams of naturally
-    // occurring minerals per bottle — nothing that moves a daily total.
+    // 700 mL (23.7 fl oz) bottle — the sport-cap size, not the 500 mL.
+    // Water, so the panel is zeros throughout. FIJI carries a few milligrams
+    // of naturally occurring minerals per bottle — nothing that moves a
+    // daily total.
     name: "Natural Artesian Water", brand: "FIJI",
-    serving: "1 bottle (500 mL / 16.9 fl oz)",
+    serving: "1 bottle (700 mL / 23.7 fl oz)",
     macros: { cal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0 },
-    waterOz: 16.9,
+    waterOz: 23.7,
     verified: true,
   },
 ];
