@@ -540,6 +540,11 @@
     return limit ? list.slice(0, limit) : list;
   }
 
+  /** Foods that count toward hydration, most-used first. */
+  function drinks() {
+    return searchFoods("").filter(function (f) { return (f.waterOz || 0) > 0; });
+  }
+
   /** Scale a food's macros for a quantity, e.g. 2 tacos. */
   function scaleMacros(macros, qty) {
     var n = parseFloat(qty);
@@ -893,7 +898,7 @@
     dayTotals: dayTotals,
 
     addFood: addFood, updateFood: updateFood, removeFood: removeFood, getFood: getFood,
-    searchFoods: searchFoods, noteFoodUsed: noteFoodUsed, scaleMacros: scaleMacros,
+    searchFoods: searchFoods, drinks: drinks, noteFoodUsed: noteFoodUsed, scaleMacros: scaleMacros,
     seedFoods: seedFoods, cleanMacros: cleanMacros,
 
     shotsSorted: shotsSorted, lastShot: lastShot, addShot: addShot, updateShot: updateShot,

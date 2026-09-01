@@ -75,12 +75,16 @@ Updating the starter library (`js/foods-seed.js`) and bumping `FOOD_SEED_REV` pu
 corrections to installs that already hold the old numbers — but only to foods you
 haven't edited. Anything you've changed yourself is yours and is never overwritten.
 
-### 💧 Water
+### 💧 Hydration
 
 Tap a cup to set the count, or use − / +. Cups past your goal still show, so drinking extra
 counts rather than disappearing. Tap the count to type an exact number — and to **define what
-a cup means**: your usual glass, a 12 oz bottle, a 1 L tumbler, in fl oz or ml. The card then
-shows both (`5 / 8 cups` and `60 / 96 oz`).
+a cup means**: your usual glass, a 12 oz bottle, a 1 L tumbler, in fl oz or ml. The card shows
+both (`5 / 8 cups` and `60 / 96 oz`).
+
+**Log a drink** skips the cup arithmetic entirely: pick what you drank, say how much, and the
+fluid is worked out from the amount. A drink that carries macros — a Gatorade Zero, say — also
+goes onto the day's food in the same action, so it's never logged twice or missed.
 
 ### 🎯 Macros
 

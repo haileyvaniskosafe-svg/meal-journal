@@ -86,7 +86,7 @@
 
     return (
       '<div class="card">' +
-        '<div class="card-head">' + UI.ico("drop") + "<h2>Water</h2>" +
+        '<div class="card-head">' + UI.ico("drop") + "<h2>Hydration</h2>" +
           '<button class="chip push" data-act="edit-water" title="Set an exact amount">' +
             UI.fmt(cups, 1) + " / " + goal + "</button></div>" +
         '<div class="waterdots">' + dots + "</div>" +
@@ -95,6 +95,7 @@
           '<button class="icon-btn sm" data-act="water" data-d="-1"' + (cups ? "" : " disabled") +
             ' aria-label="Remove a cup">' + UI.ico("minus") + "</button>" +
           '<button class="btn sm primary" data-act="water" data-d="1">' + UI.ico("plus") + "Cup</button>" +
+          '<button class="btn sm ghost" data-act="log-drink">' + UI.ico("mug") + "Drink</button>" +
           '<span class="push tiny faint">' + UI.fmt(volume) + " / " + UI.fmt(goalVolume) + " " + UI.esc(unit) + "</span>" +
         "</div>" +
       "</div>"
@@ -107,7 +108,7 @@
     var s = Store.settings;
 
     UI.modal({
-      title: "Water today",
+      title: "Hydration",
       icon: "drop",
       submitOnEnter: true,
       body:
@@ -150,6 +151,108 @@
           Store.setWater(iso, parseFloat(v.cups) || 0);
           h.close();
           UI.toast("Saved");
+        });
+      },
+    });
+  }
+
+  /**
+   * Log an actual drink: pick it, say how much, and the fluid is worked out
+   * from the amount rather than counted in whole cups. A drink with macros
+   * also goes onto the day's food, so it isn't logged twice.
+   */
+  function openDrinkModal() {
+    var iso = D.today();
+    var s = Store.settings;
+    var unit = s.volumeUnit || "oz";
+    var list = Store.drinks();
+    var chosen = null;   // null means plain water
+
+    function chipRow() {
+      return '<button type="button" class="chip on" data-drink="">' + UI.ico("drop") + "Water</button>" +
+        list.map(function (f) {
+          return '<button type="button" class="chip" data-drink="' + f.id + '">' +
+            UI.ico("mug") + UI.esc(f.name) + "</button>";
+        }).join("");
+    }
+
+    UI.modal({
+      title: "Log a drink",
+      icon: "drop",
+      submitOnEnter: true,
+      body:
+        '<div class="field"><label>What did you drink?</label>' +
+          '<div class="row tight" data-drinks>' + chipRow() + "</div>" +
+        "</div>" +
+        '<div class="grid cols-2" style="margin-top:16px">' +
+          UI.field("How much (" + unit + ")", UI.input("amount", s.cupSize || 8,
+            { type: "number", min: 0, step: "0.5", inputmode: "decimal" })) +
+          UI.field("Times", UI.input("qty", 1,
+            { type: "number", min: 1, step: 1, inputmode: "numeric" })) +
+        "</div>" +
+        '<p class="hint" data-calc style="margin-top:12px"></p>' +
+        '<label class="check" data-macrorow style="margin-top:14px;display:none">' +
+          '<input type="checkbox" name="alsoFood" checked> <span data-macrotext></span></label>',
+      foot: '<button class="btn" data-close>Cancel</button>' +
+            '<button class="btn primary" data-primary data-save>' + UI.ico("check") + "Add</button>",
+      onMount: function (h) {
+        var amountEl = h.$('[name="amount"]');
+        var qtyEl = h.$('[name="qty"]');
+        var calcEl = h.$("[data-calc]");
+        var macroRow = h.$("[data-macrorow]");
+        var macroText = h.$("[data-macrotext]");
+
+        function totalOz() {
+          return (parseFloat(amountEl.value) || 0) * (parseFloat(qtyEl.value) || 1);
+        }
+
+        function refresh() {
+          var size = s.cupSize || 8;
+          var cups = Math.round((totalOz() / size) * 10) / 10;
+          calcEl.textContent = UI.fmt(totalOz(), 1) + " " + unit + " — that's " +
+            UI.fmt(cups, 1) + (cups === 1 ? " cup" : " cups") +
+            " of your " + UI.fmt(s.waterGoal || 8) + "-cup goal.";
+
+          var hasMacros = chosen && Object.keys(chosen.macros || {}).some(function (k) { return chosen.macros[k]; });
+          macroRow.style.display = hasMacros ? "" : "none";
+          if (hasMacros) {
+            var per = chosen.waterOz ? totalOz() / chosen.waterOz : (parseFloat(qtyEl.value) || 1);
+            var scaled = Store.scaleMacros(chosen.macros, per);
+            macroText.textContent = "Also log " +
+              Store.trackedMacros().map(function (m) {
+                return UI.fmt(scaled[m.key] || 0, m.decimals) + (m.unit || "") + " " + m.label.toLowerCase();
+              }).filter(function (t) { return !/^0\D/.test(t); }).join(" · ") + " to snacks";
+          }
+        }
+
+        h.$("[data-drinks]").addEventListener("click", function (e) {
+          var b = e.target.closest("[data-drink]");
+          if (!b) return;
+          h.$$("[data-drink]").forEach(function (x) { x.classList.remove("on"); });
+          b.classList.add("on");
+          chosen = b.dataset.drink ? Store.getFood(b.dataset.drink) : null;
+          if (chosen && chosen.waterOz) amountEl.value = chosen.waterOz;
+          refresh();
+        });
+        h.el.addEventListener("input", refresh);
+        refresh();
+
+        h.$("[data-save]").addEventListener("click", function () {
+          var oz = totalOz();
+          if (oz <= 0) { amountEl.focus(); return; }
+          var cups = Store.addWaterOz(iso, oz);
+
+          var alsoFood = h.$('[name="alsoFood"]');
+          if (chosen && macroRow.style.display !== "none" && alsoFood && alsoFood.checked) {
+            var per = chosen.waterOz ? oz / chosen.waterOz : (parseFloat(qtyEl.value) || 1);
+            Store.addMeal(iso, "snack", {
+              name: chosen.name,
+              macros: Store.scaleMacros(chosen.macros, per),
+            });
+            Store.noteFoodUsed(chosen.id);
+          }
+          h.close();
+          UI.toast("+" + UI.fmt(cups, 1) + (cups === 1 ? " cup" : " cups"), "drop");
         });
       },
     });
@@ -321,6 +424,7 @@
         Store.setWater(iso, Store.water(iso) === n ? n - 1 : n);
       }
       else if (act === "edit-water") { openWaterModal(); }
+      else if (act === "log-drink")  { openDrinkModal(); }
       else if (act === "log-shot")   { Views.shots.openShotModal(); }
       else if (act === "log-move")   { Views.move.openActivityModal(); }
       else if (act === "log-weight") { Views.progress.openWeightModal(); }

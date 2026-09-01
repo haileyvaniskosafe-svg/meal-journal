@@ -147,7 +147,7 @@
           '<div class="card-head">' + UI.ico("target") + "<h2>Daily goals</h2></div>" +
           '<div class="stack" style="gap:14px">' +
             '<div class="grid cols-2">' +
-              UI.field("Water (cups/day)", UI.input("waterGoal", s.waterGoal,
+              UI.field("Hydration (cups/day)", UI.input("waterGoal", s.waterGoal,
                 { type: "number", min: 1, max: 30, step: 1 })) +
               UI.field("One cup is", UI.input("cupSize", s.cupSize || 8,
                 { type: "number", min: 1, max: 200, step: 1 })) +
