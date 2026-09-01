@@ -17,7 +17,7 @@
    Strictly, those hydrate too — the line is about keeping the daily number
    meaningful, not about physiology.
    ============================================================ */
-window.FOOD_SEED_REV = 6;
+window.FOOD_SEED_REV = 7;
 
 window.FOOD_SEED = [
   {
@@ -117,5 +117,16 @@ window.FOOD_SEED = [
     serving: "1 stick (28 g)",
     macros: { cal: 80, protein: 7, carbs: 1, fat: 6, fiber: 0, sugar: 1, sodium: 190 },
     verified: true,
+  },
+  {
+    // Label read: 1 oz (28 g / about 3 pieces), about 3 servings per bag.
+    // The bag's curve hid the carbohydrate and sugar numbers, but both rows
+    // read 0% DV, added sugars are 0 g and the whole serving is 0 calories,
+    // so there is nothing there to record.
+    name: "Dilly Bites dill pickle chips", brand: "Oh Snap!",
+    serving: "1 oz (28 g) — ~3 pieces",
+    macros: { cal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 190 },
+    verified: true,
+    note: "Whole bag is ~3 servings: 0 cal, 570 mg sodium.",
   },
 ];
