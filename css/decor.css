@@ -1,0 +1,110 @@
+/* ============================================================
+   DECOR — ambient seasonal flourishes.
+   Driven by the theme's `decor` field; js/themes.js sets
+   data-decor on <html> and populates #decorLayer.
+   Everything here is purely ornamental and aria-hidden.
+   ============================================================ */
+
+.decor-layer {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+  opacity: var(--decor-opacity);
+}
+.app-shell { position: relative; z-index: 2; }
+
+.decor-item {
+  position: absolute;
+  color: var(--decor-color, var(--accent));
+  will-change: transform;
+}
+.decor-item svg { width: 100%; height: 100%; display: block; }
+
+/* ---------- bats: drift across, flapping ---------- */
+.decor-item.bat {
+  animation: batDrift var(--t, 26s) linear var(--d, 0s) infinite;
+}
+.decor-item.bat .wing-l, .decor-item.bat .wing-r {
+  transform-origin: 50% 55%;
+  animation: flap .42s ease-in-out infinite alternate;
+}
+.decor-item.bat .wing-r { animation-delay: -.06s; }
+@keyframes batDrift {
+  0%   { transform: translate(-14vw, var(--y, 20vh)) scale(var(--s, 1)); opacity: 0; }
+  8%   { opacity: 1; }
+  50%  { transform: translate(50vw, calc(var(--y, 20vh) - 9vh)) scale(var(--s, 1)); }
+  92%  { opacity: 1; }
+  100% { transform: translate(116vw, var(--y, 20vh)) scale(var(--s, 1)); opacity: 0; }
+}
+@keyframes flap {
+  from { transform: rotate(-14deg) scaleY(.9); }
+  to   { transform: rotate(16deg) scaleY(1.05); }
+}
+
+/* ---------- leaves: tumble down ---------- */
+.decor-item.leaf {
+  animation: leafFall var(--t, 17s) linear var(--d, 0s) infinite;
+}
+@keyframes leafFall {
+  0%   { transform: translate(var(--x, 10vw), -12vh) rotate(0deg); opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { transform: translate(calc(var(--x, 10vw) + var(--sway, 8vw)), 45vh) rotate(240deg); }
+  90%  { opacity: .9; }
+  100% { transform: translate(var(--x, 10vw), 108vh) rotate(540deg); opacity: 0; }
+}
+
+/* ---------- ghosts: bob gently ---------- */
+.decor-item.ghost {
+  animation: ghostBob var(--t, 9s) ease-in-out var(--d, 0s) infinite,
+             ghostFade var(--t, 9s) ease-in-out var(--d, 0s) infinite;
+}
+@keyframes ghostBob {
+  0%, 100% { transform: translate(var(--x, 80vw), var(--y, 30vh)) scale(var(--s, 1)); }
+  50%      { transform: translate(calc(var(--x, 80vw) + 2vw), calc(var(--y, 30vh) - 4vh)) scale(var(--s, 1)); }
+}
+@keyframes ghostFade { 0%, 100% { opacity: .3 } 50% { opacity: .75 } }
+
+/* ---------- sparkles: twinkle in place ---------- */
+.decor-item.sparkle {
+  animation: twinkle var(--t, 4s) ease-in-out var(--d, 0s) infinite;
+}
+@keyframes twinkle {
+  0%, 100% { transform: translate(var(--x,50vw), var(--y,50vh)) scale(.3); opacity: 0 }
+  50%      { transform: translate(var(--x,50vw), var(--y,50vh)) scale(1);  opacity: .9 }
+}
+
+/* ---------- cobweb corners (halloween) ---------- */
+[data-decor="bats"] .content::before,
+[data-decor="bats"] .content::after {
+  content: "";
+  position: fixed; top: var(--topbar-h); width: 108px; height: 108px;
+  background-repeat: no-repeat; background-size: contain;
+  opacity: .16; pointer-events: none; z-index: 3;
+}
+[data-decor="bats"] .content::before {
+  right: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23fff' stroke-width='1.6'%3E%3Cpath d='M100 0 L0 0'/%3E%3Cpath d='M100 0 L100 100'/%3E%3Cpath d='M100 0 L20 80 M100 0 L45 92 M100 0 L72 98 M100 0 L4 52'/%3E%3Cpath d='M78 0 Q76 20 100 22'/%3E%3Cpath d='M56 0 Q52 40 100 45'/%3E%3Cpath d='M32 0 Q28 62 100 70'/%3E%3C/g%3E%3C/svg%3E");
+}
+[data-decor="bats"] .content::after {
+  left: 0; transform: scaleX(-1);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23fff' stroke-width='1.6'%3E%3Cpath d='M100 0 L0 0'/%3E%3Cpath d='M100 0 L100 100'/%3E%3Cpath d='M100 0 L20 80 M100 0 L45 92 M100 0 L72 98'/%3E%3Cpath d='M74 0 Q70 24 100 26'/%3E%3Cpath d='M46 0 Q42 48 100 54'/%3E%3C/g%3E%3C/svg%3E");
+}
+@media (max-width: 900px) {
+  [data-decor="bats"] .content::before,
+  [data-decor="bats"] .content::after { width: 68px; height: 68px; opacity: .11; }
+}
+
+/* decor off entirely */
+[data-decor="none"] .decor-layer { display: none; }
+[data-decor="none"] .content::before,
+[data-decor="none"] .content::after { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .decor-layer { opacity: calc(var(--decor-opacity) * .5); }
+  .decor-item { animation: none !important; }
+  .decor-item.bat   { transform: translate(var(--x, 20vw), var(--y, 20vh)) scale(var(--s,1)); }
+  .decor-item.leaf  { transform: translate(var(--x, 20vw), var(--y, 30vh)); }
+  .decor-item.ghost { transform: translate(var(--x, 70vw), var(--y, 30vh)) scale(var(--s,1)); opacity: .5; }
+  .decor-item.sparkle { transform: translate(var(--x,50vw), var(--y,50vh)); opacity: .6; }
+}
